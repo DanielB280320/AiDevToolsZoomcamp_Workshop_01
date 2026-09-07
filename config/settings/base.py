@@ -40,6 +40,7 @@ DJANGO_APPS = [
 
 LOCAL_APPS = [
     "accounts",
+    "core",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
@@ -50,6 +51,10 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Task 6: authentication is the default for every view. Opting out is
+    # explicit (@login_not_required) so a new view is private unless someone
+    # deliberately makes it public — the safe direction for the mistake.
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

@@ -6,6 +6,8 @@ urlpatterns = [
     # Operator escape hatch only (architecture.md §6). The roommate-facing chore
     # screens are separate and land in later tasks.
     path("admin/", admin.site.urls),
+    path("", include("accounts.urls")),
+    path("", include("core.urls")),
 ]
 
 if settings.DEBUG:

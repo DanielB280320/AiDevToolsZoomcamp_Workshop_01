@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in · Chores{% endblock %}
+
+{% block content %}
+<div class="card card--narrow">
+  <h1>Sign in</h1>
+  <p class="lede">Your name and your PIN.</p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+    {% if form.non_field_errors %}
+      <div class="form-errors" role="alert">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+
+    {% for field in form %}
+      <div class="field">
+        {{ field.label_tag }}
+        {{ field }}
+        {% for error in field.errors %}
+          <div class="field__error">{{ error }}</div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <button type="submit" class="btn">Sign in</button>
+  </form>
+</div>
+{% endblock %}
