@@ -12,5 +12,7 @@ through, or promoted to a real task when one of them starts to matter.
 - `config/tests/test_settings.py` (440 lines, 19 tests) shells out to a fresh
   interpreter per case to test Django settings. Green, but it is the slowest
   and least load-bearing part of the suite.
-- Task 8 (chores with per-chore cadence) landed as a scaffold in `be7d680`.
-  Confirm it meets its criteria before counting it done.
+- `ChoreForm.__init__` falls back to `self.instance.household_id` (an int) when
+  no household is passed, then assigns it to the `household` FK. Both views
+  always pass the household, so the path is unreachable today — but it would
+  raise if a future caller relied on the fallback.

@@ -7,10 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–7 are done and committed. Task 8 landed as a scaffold. Next task: 8
-(confirm) then 9.**
+**Tasks 1–8 are done and committed. Next task: 9.**
 
-Do not re-implement, re-groom or re-verify tasks 1–7. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–8. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
