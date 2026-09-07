@@ -34,12 +34,25 @@ TERMINAL_STATUSES = frozenset(
 )
 
 
+#: The outcomes history is *about*. A pending turn has not happened yet, so it
+#: has no place on the screen people open to settle what did.
+SETTLED_STATUSES = (
+    TurnStatus.COMPLETED,
+    TurnStatus.MISSED,
+    TurnStatus.SKIPPED_AWAY,
+)
+SETTLED_CHOICES = [(s.value, s.label) for s in SETTLED_STATUSES]
+
+
 class TurnQuerySet(models.QuerySet):
     def for_household(self, household):
         return self.filter(chore__household=household)
 
     def pending(self):
         return self.filter(status=TurnStatus.PENDING)
+
+    def settled(self):
+        return self.filter(status__in=SETTLED_STATUSES)
 
     def outstanding(self):
         """Still owed by someone — pending, or missed and not yet done."""

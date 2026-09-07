@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}History · Chores{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1>History</h1>
+      <p class="lede">Who did what, and how the load has fallen.</p>
+    </div>
+  </div>
+
+  {% if summary %}
+    <section class="panel">
+      <h2>The share so far</h2>
+      <p class="note">
+        Done counts who actually did the work, so covering for someone is credited to them.
+        Missed counts whose turn went undone. Away is neither.
+      </p>
+      <div class="table-scroll">
+        <table class="tally">
+          <thead>
+            <tr><th>Roommate</th><th>Done</th><th>Missed</th><th>Away</th></tr>
+          </thead>
+          <tbody>
+            {% for row in summary %}
+              <tr>
+                <td>
+                  {{ row.member.display_name }}
+                  {% if not row.member.is_active %}<span class="tag tag--quiet">left</span>{% endif %}
+                </td>
+                <td>
+                  {{ row.done }}
+                  {% if row.covered %}<span class="row__meta">({{ row.covered }} covering)</span>{% endif %}
+                </td>
+                <td>{% if row.missed %}<span class="tag tag--bad">{{ row.missed }}</span>{% else %}0{% endif %}</td>
+                <td>{{ row.skipped }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Every turn</h2>
+    <form method="get" class="filters">
+      {% if form.non_field_errors %}
+        <ul class="form-errors">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% for field in form %}
+        <div class="field field--inline">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for e in field.errors %}<p class="field__error">{{ e }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="field field--inline">
+        <button type="submit" class="btn">Filter</button>
+        {% if is_filtered %}<a class="cancel" href="{% url 'history' %}">Clear</a>{% endif %}
+      </div>
+    </form>
+
+    <ul class="stack">
+      {% for turn in page %}
+        <li class="row {% if turn.status == 'MISSED' %}row--danger{% endif %}">
+          <div class="row__main">
+            <span class="row__name">{{ turn.chore.name }}</span>
+            <span class="row__meta">
+              due {{ turn.due_date }} · {{ turn.assignee.display_name }} ·
+              {{ turn.get_status_display }}
+              {% if turn.was_covered %} · done by {{ turn.completed_by.display_name }}{% endif %}
+              {% if turn.was_late %}<span class="tag tag--quiet">late</span>{% endif %}
+            </span>
+          </div>
+        </li>
+      {% empty %}
+        <li class="empty">
+          {% if is_filtered %}
+            Nothing matches those filters. <a href="{% url 'history' %}">Show everything</a>.
+          {% else %}
+            Nothing has been done, missed or skipped yet.
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if page.has_other_pages %}
+      <nav class="pager">
+        {% if page.has_previous %}
+          <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.previous_page_number }}">Newer</a>
+        {% endif %}
+        <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}
+          <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.next_page_number }}">Older</a>
+        {% endif %}
+      </nav>
+    {% endif %}
+  </section>
+{% endblock %}

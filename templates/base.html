@@ -15,6 +15,7 @@
           <a href="{% url 'dashboard' %}">Home</a>
           {# plan.md §7: the list is everyone's to read, so it is everyone's to reach. #}
           <a href="{% url 'chore_list' %}">Chores</a>
+          <a href="{% url 'history' %}">History</a>
           <a href="{% url 'swap_list' %}">Swaps</a>
           <a href="{% url 'away_list' %}">Away</a>
           {% if user.is_admin %}<a href="{% url 'member_list' %}">Roommates</a>{% endif %}

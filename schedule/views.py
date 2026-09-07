@@ -1,12 +1,13 @@
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.mixins import household_of
-from schedule.forms import AwayPeriodForm, SwapForm
-from schedule.models import AwayPeriod, Turn
+from schedule.forms import AwayPeriodForm, HistoryFilterForm, SwapForm
+from schedule.models import AwayPeriod, Turn, TurnStatus
 from schedule.services.transitions import TransitionRefused, complete_turn
 
 
@@ -117,4 +118,81 @@ def swap_list(request):
         request,
         "schedule/swap_list.html",
         {"form": form, "swapped": swapped},
+    )
+
+
+#: Long enough that a month of a five-person flat fits on one page, short
+#: enough to stay readable on a phone.
+HISTORY_PAGE_SIZE = 25
+
+
+def fairness_summary(household, turns):
+    """Per roommate: work actually done, turns missed, absences skipped.
+
+    Completed counts by ``completed_by`` rather than ``assignee`` -- the
+    question this table answers is who did the work, and plan.md §4 records
+    covering precisely so it can be credited to the person who turned up.
+    Missed counts by ``assignee``, because that is whose turn went undone.
+
+    Skipped is shown alongside rather than folded into either. It is neither a
+    contribution nor a failure, and hiding it would make a roommate who was
+    away look idle (plan.md §8).
+    """
+    rows = []
+    for member in household.members.order_by("display_name"):
+        done = turns.filter(status=TurnStatus.COMPLETED, completed_by=member).count()
+        missed = turns.filter(status=TurnStatus.MISSED, assignee=member).count()
+        skipped = turns.filter(status=TurnStatus.SKIPPED_AWAY, assignee=member).count()
+        covered = (
+            turns.filter(status=TurnStatus.COMPLETED, completed_by=member)
+            .exclude(assignee=member)
+            .count()
+        )
+        if done or missed or skipped:
+            rows.append(
+                {
+                    "member": member,
+                    "done": done,
+                    "missed": missed,
+                    "skipped": skipped,
+                    "covered": covered,
+                }
+            )
+    return rows
+
+
+def history(request):
+    """Who did what, and how the load has fallen.
+
+    plan.md §4 calls for a history log and for surfacing who missed which
+    chores; this is the screen where both are actually read. It favours clarity
+    over density on purpose -- people open it when they disagree, and a dense
+    table is easy to misread in your own favour.
+    """
+    household = household_of(request)
+    form = HistoryFilterForm(request.GET or None, household=household)
+
+    turns = (
+        Turn.objects.for_household(household)
+        .settled()
+        .select_related("chore", "assignee", "completed_by")
+        .order_by("-due_date", "chore__name")
+    )
+    turns = form.narrow(turns)
+
+    page = Paginator(turns, HISTORY_PAGE_SIZE).get_page(request.GET.get("page"))
+
+    query = request.GET.copy()
+    query.pop("page", None)
+
+    return render(
+        request,
+        "schedule/history.html",
+        {
+            "form": form,
+            "page": page,
+            "summary": fairness_summary(household, turns),
+            "is_filtered": bool(query),
+            "querystring": query.urlencode(),
+        },
     )

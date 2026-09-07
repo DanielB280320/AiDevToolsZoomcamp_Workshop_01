@@ -1,6 +1,7 @@
 from django import forms
+from django.db import models
 
-from schedule.models import AwayPeriod, Turn, TurnStatus
+from schedule.models import SETTLED_CHOICES, AwayPeriod, Turn, TurnStatus
 from schedule.services.transitions import TransitionRefused, swap_turns
 
 
@@ -106,3 +107,67 @@ class SwapForm(forms.Form):
             except TransitionRefused as refusal:
                 raise forms.ValidationError(str(refusal)) from refusal
         return cleaned
+
+
+class HistoryFilterForm(forms.Form):
+    """Narrow the history down. Every field optional; blank means "everything".
+
+    A GET form, so a filtered view is a URL someone can paste into the group
+    chat — which is exactly what happens when the disagreement is the reason
+    anybody opened this screen.
+    """
+
+    member = forms.ModelChoiceField(
+        queryset=None, required=False, empty_label="Everyone", label="Roommate"
+    )
+    chore = forms.ModelChoiceField(
+        queryset=None, required=False, empty_label="All chores"
+    )
+    status = forms.ChoiceField(required=False, choices=[], label="Outcome")
+    since = forms.DateField(
+        required=False,
+        label="From",
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
+    until = forms.DateField(
+        required=False,
+        label="To",
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
+
+    def __init__(self, *args, household, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["member"].queryset = household.members.order_by("display_name")
+        self.fields["chore"].queryset = household.chores.order_by("name")
+        self.fields["status"].choices = [("", "Any outcome"), *SETTLED_CHOICES]
+        for name in ("since", "until"):
+            self.fields[name].input_formats = ["%Y-%m-%d"]
+
+    def clean(self):
+        cleaned = super().clean()
+        since, until = cleaned.get("since"), cleaned.get("until")
+        if since and until and until < since:
+            raise forms.ValidationError("The end date is before the start date.")
+        return cleaned
+
+    def narrow(self, turns):
+        """Apply whatever the roommate actually filled in."""
+        if not self.is_valid():
+            return turns
+        data = self.cleaned_data
+        if data.get("member"):
+            # Their turn *or* their work: someone who covered for a flatmate
+            # should show up when you filter by their name.
+            turns = turns.filter(
+                models.Q(assignee=data["member"])
+                | models.Q(completed_by=data["member"])
+            )
+        if data.get("chore"):
+            turns = turns.filter(chore=data["chore"])
+        if data.get("status"):
+            turns = turns.filter(status=data["status"])
+        if data.get("since"):
+            turns = turns.filter(due_date__gte=data["since"])
+        if data.get("until"):
+            turns = turns.filter(due_date__lte=data["until"])
+        return turns
