@@ -8,7 +8,7 @@ from django.contrib.auth.backends import ModelBackend
 from django.core.exceptions import ValidationError
 
 from accounts.backends import PinBackend
-from accounts.models import Member
+from accounts.models import Household, Member
 from accounts.validators import validate_pin
 from conftest import DEFAULT_PIN
 
@@ -285,3 +285,140 @@ class TestCreateSuperuserCannotBeGivenAHousehold:
         assert (
             PinBackend().authenticate(None, display_name="ShortCredOp", pin="x") is None
         )
+
+
+class TestPinValidationInvariantSurvivesEveryPath:
+    """QA's round-4 finding: guarding create_superuser's own kwargs (the
+    previous round's fix, in TestCreateSuperuserCannotBeGivenAHousehold
+    above) closed exactly one door and QA immediately found two more into
+    the identical outcome -- a household-scoped Member row whose credential
+    was never checked against validate_pin. accounts/models.py now enforces
+    this as one invariant, in Member.save(), backed by a real column
+    (pin_is_validated) rather than a per-process flag, precisely so it
+    survives a reload in a later request rather than only holding for the
+    lifetime of the object that first set the password. These tests cover
+    the invariant itself, not just the two specific doors QA walked
+    through.
+    """
+
+    def test_the_general_case_is_blocked_directly(self, household):
+        """The shape both surviving bypasses reduce to: a household-scoped
+        row whose password was set via set_password() (unvalidated),
+        never set_pin(). No call site, no admin, no round-trip through a
+        view -- just the model API directly, to isolate the invariant from
+        any one path to it."""
+        member = Member(display_name="RawSet", household=household)
+        member.set_password("not-a-valid-pin")
+        with pytest.raises(ValidationError):
+            member.save()
+        assert not Member.objects.filter(display_name="RawSet").exists()
+
+    def test_bypass_1_post_hoc_household_assignment_same_process(self):
+        """QA's round-4 reproduction: an operator created household-less,
+        then given a household on the same in-memory instance."""
+        household = Household.objects.create(name="PostHocSameProcess")
+        operator = Member.objects.create_superuser(
+            display_name="PostHocOp", password="x"
+        )
+        operator.household = household
+        with pytest.raises(ValidationError):
+            operator.save()
+        operator.refresh_from_db()
+        assert operator.household is None
+        assert (
+            PinBackend().authenticate(None, display_name="PostHocOp", pin="x") is None
+        )
+
+    def test_bypass_1_post_hoc_household_assignment_after_a_fresh_reload(self):
+        """The harder case a purely in-memory flag would have missed: the
+        operator is created in one step, then loaded fresh in a completely
+        separate query (standing in for a later, unrelated request) before
+        a household is attached. pin_is_validated being a real column,
+        not a per-instance flag, is what makes this fail exactly like the
+        same-process case above."""
+        household = Household.objects.create(name="PostHocFreshLoad")
+        Member.objects.create_superuser(display_name="PostHocOp2", password="x")
+
+        reloaded = Member.objects.get(display_name="PostHocOp2")
+        reloaded.household = household
+        with pytest.raises(ValidationError):
+            reloaded.save()
+        assert Member.objects.get(display_name="PostHocOp2").household is None
+
+    def test_bypass_2_admin_add_screen_cannot_create_an_unvalidated_member(
+        self, client
+    ):
+        """QA's round-4 reproduction of the live Django admin bypass:
+        accounts/admin.py::MemberAdmin inherits Django's stock
+        UserCreationForm, which validates a password only against
+        AUTH_PASSWORD_VALIDATORS and calls set_password() directly --
+        never validate_pin. client.login(), not force_login(): with two
+        AUTHENTICATION_BACKENDS configured, force_login can silently
+        mis-authenticate instead of exercising the real admin login path
+        (a trap the PM flagged after hitting it directly).
+        """
+        household = Household.objects.create(name="AdminBypassHouse")
+        Member.objects.create_superuser(
+            display_name="AdminOp", password="whatever-op-pw"
+        )
+        assert client.login(username="AdminOp", password="whatever-op-pw")
+
+        # The criterion is explicit that an unhandled exception here (rather
+        # than a clean inline form error) is acceptable UX -- the hard
+        # requirement is that no row is ever persisted.
+        with pytest.raises(ValidationError):
+            client.post(
+                "/admin/accounts/member/add/",
+                {
+                    "display_name": "AdminSneak",
+                    "household": household.pk,
+                    "password1": "Zq7!Xk2",
+                    "password2": "Zq7!Xk2",
+                },
+            )
+        assert Member.objects.filter(display_name="AdminSneak").first() is None
+
+    def test_set_pin_then_attaching_a_household_is_still_allowed(self, household):
+        """The invariant must not collateral-damage the legitimate order of
+        operations: validate first, attach household, save -- exactly what
+        MemberForm.save() (#7) already does."""
+        member = Member(display_name="LegitOrder")
+        member.set_pin("135791")
+        member.household = household
+        member.save()
+        member.refresh_from_db()
+        assert member.household == household
+        assert member.check_pin("135791")
+
+    def test_update_fields_password_only_save_still_persists_the_flag(self, household):
+        """accounts/views.py::member_reset_pin (#7, out of this issue's
+        scope to edit) calls member.set_pin(...) then
+        member.save(update_fields=["password"]) -- without also listing
+        pin_is_validated, that save would otherwise leave the persisted
+        flag stale, silently reopening this exact hole for the *next*
+        unrelated save on the row. Reproduces that call shape directly and
+        confirms a fresh reload sees the flag correctly set."""
+        member = Member.objects.create_user(
+            display_name="ResetPinCheck", password="111111", household=household
+        )
+        member.set_pin("222222")
+        member.save(update_fields=["password"])
+
+        reloaded = Member.objects.get(pk=member.pk)
+        assert reloaded.pin_is_validated is True
+        assert reloaded.check_pin("222222")
+        # And the invariant still holds for this row afterwards -- an
+        # unrelated save is not blocked.
+        reloaded.is_admin = True
+        reloaded.save(update_fields=["is_admin"])
+
+    def test_createsuperuser_credential_is_marked_unvalidated_but_saves_fine(self):
+        """Documents the exemption's actual state rather than leaving it
+        implicit: create_superuser's credential is honestly recorded as
+        not roommate-PIN-validated, and that is fine precisely because
+        household stays None."""
+        operator = Member.objects.create_superuser(
+            display_name="HonestOp", password="whatever-shape"
+        )
+        assert operator.pin_is_validated is False
+        assert operator.household is None

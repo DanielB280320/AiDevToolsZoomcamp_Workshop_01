@@ -1,6 +1,7 @@
 import datetime as dt
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -106,6 +107,19 @@ class Member(AbstractBaseUser, PermissionsMixin):
         help_text="When they moved in. The insert point for chore rotations.",
     )
 
+    # Internal bookkeeping only — never listed in a form or fieldset, never
+    # shown anywhere. True exactly when the current ``password`` hash was
+    # set through ``set_pin()`` (which runs ``validate_pin`` first);
+    # ``set_password()`` — called directly by ``create_superuser``, Django's
+    # own admin password-change form, ``manage.py changepassword``, and any
+    # stock ``ModelForm`` such as the admin's built-in ``UserCreationForm``
+    # (accounts/admin.py's "Add member" screen) — always clears it. Persisted
+    # (not merely tracked in memory for the lifetime of one Python object)
+    # so the guarantee survives a reload in a later request, not just the
+    # process that first set the password. See ``save()`` below, which is
+    # what actually enforces task 4 criterion 6's invariant using this field.
+    pin_is_validated = models.BooleanField(default=False, editable=False)
+
     objects = MemberManager()
 
     USERNAME_FIELD = "display_name"
@@ -144,17 +158,68 @@ class Member(AbstractBaseUser, PermissionsMixin):
         """Validate, hash and store a PIN.
 
         Named for what it holds, so no caller is tempted to think the field
-        keeps a plaintext PIN. Unlike the inherited ``set_password`` — which
-        this still uses to do the actual hashing, and which Django internals
-        (the admin's own password-change form, ``manage.py changepassword``)
-        call directly and must keep working unconstrained — this is the
-        single choke point for the six-digit minimum (plan.md §5,
-        architecture.md §6): every path that sets a *roommate's* PIN through
-        the model layer, not just the form classes in accounts/forms.py, goes
-        through here and raises ``ValidationError`` for anything shorter.
+        keeps a plaintext PIN. The only setter that marks
+        ``pin_is_validated`` True — see ``set_password()`` and ``save()``
+        below for what that flag actually enforces, and why.
         """
         validate_pin(raw_pin)
         self.set_password(raw_pin)
+        self.pin_is_validated = True
+
+    def set_password(self, raw_password):
+        """Hash and store a credential, exactly like the inherited method —
+        Django internals (the admin's own password-change form,
+        ``manage.py changepassword``), ``create_superuser`` (legitimately
+        exempt from the PIN policy while ``household`` stays ``None``, see
+        ``MemberManager``), and any stock ``ModelForm`` all call this
+        directly and must keep working, unconstrained, exactly as before.
+
+        The one addition: this always clears ``pin_is_validated``, because
+        a call here — as opposed to ``set_pin()`` — is proof the six-digit
+        minimum was *not* checked for whatever was just set. ``save()``
+        below is what turns that into an actual guarantee.
+        """
+        super().set_password(raw_password)
+        self.pin_is_validated = False
+
+    def save(self, *args, **kwargs):
+        """Task 4 criterion 6's invariant, enforced at the one layer every
+        write to this model passes through, rather than as a growing list
+        of guarded call sites (each of which was, in turn, defeated by a
+        new one): a row may never be persisted with ``household`` set and a
+        credential that was never run through ``validate_pin``.
+
+        This is checked against ``pin_is_validated`` (a real column, not an
+        in-memory-only flag) precisely so the guarantee survives a reload
+        in a later request — an operator created household-less, then
+        loaded fresh in a separate request and given a household there,
+        must be caught exactly the same as doing both in one breath.
+
+        ``create_superuser`` stays exempt: it always constructs the row
+        with ``household=None`` (enforced in ``MemberManager``), so the
+        check below never triggers for it — the exemption holds only for
+        as long as that stays true, which is the whole point.
+        """
+        if self.household_id is not None and not self.pin_is_validated:
+            raise ValidationError(
+                "This member has a household but its current credential was "
+                "never validated as a roommate PIN (accounts/validators.py, "
+                "validate_pin). Set it with member.set_pin(raw_pin) before "
+                "saving, or use MemberManager.create_user(...) which does "
+                "this for you."
+            )
+        # A caller updating only ["password"] (accounts/views.py's PIN-reset
+        # view, out of this issue's scope to edit) must not leave this flag
+        # stale in the database — keep the two in lockstep without needing
+        # every such call site to remember to list both.
+        update_fields = kwargs.get("update_fields")
+        if (
+            update_fields is not None
+            and "password" in update_fields
+            and "pin_is_validated" not in update_fields
+        ):
+            kwargs["update_fields"] = [*update_fields, "pin_is_validated"]
+        super().save(*args, **kwargs)
 
     def check_pin(self, raw_pin):
         return self.check_password(raw_pin)
