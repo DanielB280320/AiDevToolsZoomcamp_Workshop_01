@@ -33,10 +33,18 @@ def chore_list(request):
 
 def chore_detail(request, pk):
     chore = get_object_or_404(_household_chores(request), pk=pk)
+    # The rota's next few turns, so the "done" action from task 14 has somewhere
+    # to live before task 16 builds the real home screen.
+    turns = chore.turns.select_related("assignee", "completed_by").order_by("due_date")
     return render(
         request,
         "chores/chore_detail.html",
-        {"chore": chore, "can_edit": request.user.is_admin},
+        {
+            "chore": chore,
+            "can_edit": request.user.is_admin,
+            "outstanding": turns.outstanding()[:8],
+            "settled": turns.exclude(status__in=["PENDING", "MISSED"])[:8],
+        },
     )
 
 

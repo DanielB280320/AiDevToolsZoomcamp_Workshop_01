@@ -27,5 +27,45 @@
       </button>
     </form>
   {% endif %}
+  <h2>Coming up</h2>
+  <ul class="stack">
+    {% for turn in outstanding %}
+      <li class="row">
+        <div class="row__main">
+          <span class="row__name">{{ turn.assignee.display_name }}</span>
+          <span class="row__meta">
+            due {{ turn.due_date }}
+            {% if turn.status == "MISSED" %}<span class="tag tag--bad">Missed</span>{% endif %}
+          </span>
+        </div>
+        <form method="post" action="{% url 'turn_complete' turn.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.path }}">
+          <button type="submit" class="btn">Done</button>
+        </form>
+      </li>
+    {% empty %}
+      <li class="empty">Nothing outstanding. Turns appear once this chore has a rotation.</li>
+    {% endfor %}
+  </ul>
+
+  {% if settled %}
+    <h2>Recently settled</h2>
+    <ul class="stack">
+      {% for turn in settled %}
+        <li class="row row--muted">
+          <div class="row__main">
+            <span class="row__name">{{ turn.assignee.display_name }}</span>
+            <span class="row__meta">
+              {{ turn.due_date }} · {{ turn.get_status_display }}
+              {% if turn.was_covered %}(done by {{ turn.completed_by.display_name }}){% endif %}
+              {% if turn.was_late %}<span class="tag tag--quiet">late</span>{% endif %}
+            </span>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
   <p class="note"><a href="{% url 'chore_list' %}">Back to all chores</a></p>
 {% endblock %}

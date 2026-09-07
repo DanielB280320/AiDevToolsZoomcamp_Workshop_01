@@ -16,3 +16,8 @@ through, or promoted to a real task when one of them starts to matter.
   no household is passed, then assigns it to the `household` FK. Both views
   always pass the household, so the path is unreachable today — but it would
   raise if a future caller relied on the fallback.
+- pytest hands out one `client` per test, so two `as_<name>` fixtures both built
+  on it are the same session. Caught in task 14's concurrency test, where it
+  would have turned "two people racing" into "one person tapping twice". No
+  other test currently takes two such fixtures, but it is an easy trap to
+  re-enter — a second session needs its own `Client()`.
