@@ -13,6 +13,8 @@
         <a class="site-header__brand" href="{% url 'dashboard' %}">Chores</a>
         <nav class="site-nav">
           <a href="{% url 'dashboard' %}">Home</a>
+          {# plan.md §7: the list is everyone's to read, so it is everyone's to reach. #}
+          <a href="{% url 'chore_list' %}">Chores</a>
           {% if user.is_admin %}<a href="{% url 'member_list' %}">Roommates</a>{% endif %}
           <span class="site-nav__who">{{ user.display_name }}</span>
           <form method="post" action="{% url 'logout' %}">
