@@ -438,3 +438,39 @@ def test_readme_documents_setup_steps_in_order():
     ]
     positions = [readme.index(step) for step in steps]
     assert positions == sorted(positions), "README setup steps are out of order"
+
+
+class TestTheSuiteForcesItsOwnSettings:
+    """A developer's shell must not be able to change what the suite runs under.
+
+    pytest-django's precedence is command line > environment > ini, so the
+    ``DJANGO_SETTINGS_MODULE`` ini key alone loses to an exported variable —
+    which silently ran the whole suite under dev settings: debug toolbar
+    loaded, PBKDF2 rather than the fast test hasher, different ALLOWED_HOSTS.
+    The dangerous half is not the slowness; it is that a green local run would
+    stop meaning what CI means by it.
+    """
+
+    def test_a_hostile_environment_variable_does_not_win(self):
+        result = run(
+            [PYTHON, "-m", "pytest", "accounts/tests/test_models.py", "--collect-only"],
+            env_overrides={"DJANGO_SETTINGS_MODULE": "config.settings.dev"},
+        )
+
+        assert "settings: config.settings.test" in result.stdout, result.stdout
+        assert "config.settings.dev" not in result.stdout
+
+    def test_the_settings_come_from_the_option_not_the_ini_key(self):
+        result = run(
+            [PYTHON, "-m", "pytest", "accounts/tests/test_models.py", "--collect-only"]
+        )
+
+        assert "settings: config.settings.test (from option)" in result.stdout
+
+    def test_the_suite_actually_runs_green_under_a_hostile_environment(self):
+        result = run(
+            [PYTHON, "-m", "pytest", "accounts/tests/test_models.py", "-q"],
+            env_overrides={"DJANGO_SETTINGS_MODULE": "config.settings.dev"},
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
