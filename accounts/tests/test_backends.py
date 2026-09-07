@@ -230,3 +230,58 @@ class TestSixDigitMinimumEnforcedEverywhere:
             display_name="RootAdmin", password="Not-Digits-Only!"
         )
         assert operator.check_password("Not-Digits-Only!")
+
+
+class TestCreateSuperuserCannotBeGivenAHousehold:
+    """QA's second-round finding on task 4: create_superuser's PIN-policy
+    exemption is only safe if the account it creates is genuinely
+    unreachable through PinBackend, which gates on household_id is not
+    None. The manager used to forward **extra_fields unfiltered, so
+    create_superuser(..., household=some_household) produced an
+    admin-privileged, household-scoped "roommate" with a one-character,
+    unvalidated PIN, fully reachable through PinBackend -- indistinguishable
+    from a compliant roommate admin. Both directions of the fix are covered
+    here: the manager refuses to create such a row at all, and (as a
+    second, independent line of defense) an operator account it does create
+    is confirmed to stay locked out of PinBackend even carrying a
+    policy-violating credential.
+    """
+
+    def test_household_kwarg_is_rejected(self, household):
+        with pytest.raises(ValueError):
+            Member.objects.create_superuser(
+                display_name="SneakyOp", password="x", household=household
+            )
+        assert not Member.objects.filter(display_name="SneakyOp").exists()
+
+    def test_household_id_kwarg_is_rejected(self, household):
+        with pytest.raises(ValueError):
+            Member.objects.create_superuser(
+                display_name="SneakyOp2", password="x", household_id=household.pk
+            )
+        assert not Member.objects.filter(display_name="SneakyOp2").exists()
+
+    def test_household_is_none_is_accepted(self, household):
+        """Passing the field's own default explicitly must not be treated
+        as an attempt to set a household."""
+        operator = Member.objects.create_superuser(
+            display_name="ExplicitNoneOp", password="whatever-shape", household=None
+        )
+        assert operator.household is None
+
+    def test_created_operator_always_has_no_household(self):
+        operator = Member.objects.create_superuser(
+            display_name="PlainOp", password="whatever-shape-this-is"
+        )
+        assert operator.household is None
+
+    def test_operator_with_a_short_pin_still_cannot_sign_in_via_pinbackend(self):
+        """The other direction: even though create_superuser lets a
+        non-numeric, one-character-shape credential through (by design),
+        confirm end-to-end that PinBackend still cannot be tricked into
+        authenticating that account -- the household=None invariant this
+        class enforces is what the exemption actually depends on."""
+        Member.objects.create_superuser(display_name="ShortCredOp", password="x")
+        assert (
+            PinBackend().authenticate(None, display_name="ShortCredOp", pin="x") is None
+        )

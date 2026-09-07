@@ -41,8 +41,6 @@ class MemberManager(BaseUserManager):
         """The Django-admin operator account (architecture.md §6).
 
         Distinct from ``is_admin``, which is the household role from plan.md §7.
-        A superuser is also given the household role so that a one-person
-        bootstrap does not lock itself out of the chore screens.
 
         Deliberately *not* subject to the roommate PIN policy
         (``enforce_pin_policy=False``, so this goes through ``set_password``
@@ -51,15 +49,49 @@ class MemberManager(BaseUserManager):
         ``ModelBackend`` (``username=``/``password=``), a login typed once by
         whoever runs the deployment, not a PIN read off a shared household
         touchscreen. Restricting it to six digits, numeric-only would be a
-        strictly *weaker* admin credential, not a safer one. The roommate-side
-        risk this task closes — PinBackend accepting a short PIN — is already
-        shut for this account regardless of its password shape, because a
-        member with no household can no longer authenticate through
-        PinBackend at all (accounts/backends.py, task 4 criterion 7); a
-        household-scoped admin, if one is later bootstrapped with a real
-        household attached, should be created through ``create_user`` plus an
-        ``is_admin=True`` flag instead, which does enforce the PIN policy.
+        strictly *weaker* admin credential, not a safer one.
+
+        That exemption only holds if this account is genuinely unreachable
+        through the roommate-facing ``PinBackend`` (accounts/backends.py),
+        which gates on ``household_id is not None`` — so this method makes
+        household-lessness a real, enforced invariant rather than a
+        convention: it *always* creates the member with ``household=None``,
+        regardless of what a caller passes. An explicit, non-``None``
+        ``household``/``household_id`` kwarg is rejected outright rather
+        than silently dropped, because silently discarding an argument a
+        caller deliberately supplied would hide a bug instead of surfacing
+        it. (A previous version of this method forwarded ``**extra_fields``
+        unfiltered and let a caller do exactly that —
+        ``create_superuser(..., household=some_household)`` — producing an
+        admin-privileged, household-scoped "roommate" with an unvalidated,
+        arbitrarily short PIN, fully reachable through ``PinBackend``. See
+        task 4 criterion 6.)
+
+        A household's first admin *is* a roommate and should get a
+        policy-compliant PIN: create them with
+        ``create_user(..., is_admin=True)`` instead (the path #22's bootstrap
+        command must use for that step), not this method.
         """
+        if extra_fields.get("household") is not None:
+            raise ValueError(
+                "create_superuser() never sets a household — the operator "
+                "account must stay unreachable through the roommate-facing "
+                "PinBackend, which depends on household being None. Create "
+                "a household's first admin with create_user(..., "
+                "is_admin=True) instead, which enforces the roommate PIN "
+                "policy."
+            )
+        if extra_fields.get("household_id") is not None:
+            raise ValueError(
+                "create_superuser() never sets a household — pass neither "
+                "household nor household_id."
+            )
+        # Force it explicitly rather than merely defaulting it, and drop
+        # household_id so the two can never disagree: this line is what
+        # makes household-lessness true regardless of what was checked above.
+        extra_fields.pop("household_id", None)
+        extra_fields["household"] = None
+
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_admin", True)
