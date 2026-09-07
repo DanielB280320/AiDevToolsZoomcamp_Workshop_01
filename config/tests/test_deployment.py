@@ -68,10 +68,18 @@ def test_debug_is_off_in_production():
 
 @pytest.mark.parametrize("missing", ["SECRET_KEY", "ALLOWED_HOSTS"])
 def test_a_missing_required_setting_refuses_to_start(missing):
-    """Serving with no signing key would be worse than not serving."""
-    result = run(
-        [PYTHON, "manage.py", "check"], env_overrides={missing: ""}, drop=[missing]
-    )
+    """Serving with no signing key would be worse than not serving.
+
+    The variable is set empty rather than unset, and that is deliberate.
+    ``base.py`` calls ``environ.Env.read_env(BASE_DIR / ".env")``, so on a
+    machine where the developer followed the README and created a ``.env``,
+    simply unsetting the variable lets the file supply it again and the test
+    passes for the wrong reason -- or fails, depending on whether a ``.env``
+    happens to exist. django-environ does not override a variable already in
+    the environment, so an explicit empty value is what "missing" reliably
+    looks like to ``prod.py``'s ``if not ...`` guard, with or without a .env.
+    """
+    result = run([PYTHON, "manage.py", "check"], env_overrides={missing: ""})
 
     assert result.returncode != 0
     assert "ImproperlyConfigured" in result.stderr
@@ -79,11 +87,8 @@ def test_a_missing_required_setting_refuses_to_start(missing):
 
 
 def test_the_error_says_how_to_fix_it():
-    result = run(
-        [PYTHON, "manage.py", "check"],
-        env_overrides={"SECRET_KEY": ""},
-        drop=["SECRET_KEY"],
-    )
+    result = run([PYTHON, "manage.py", "check"], env_overrides={"SECRET_KEY": ""})
+
     assert "get_random_secret_key" in result.stderr
 
 

@@ -11,14 +11,27 @@ design.
 1. **Create and activate a virtualenv:**
 
    ```bash
-   python -m venv .venv
+   uv venv
    source .venv/bin/activate      # Windows: .venv\Scripts\activate
    ```
+
+   This project's `.venv` was built with [uv](https://docs.astral.sh/uv/), and
+   `uv venv` is the path most likely to just work. The stdlib equivalent is
+   `python3 -m venv .venv` — note `python3`, not `python`, since most Linux
+   distributions ship only the versioned name — but on Debian and Ubuntu that
+   fails with `No module named 'ensurepip'` until you
+   `apt install python3-venv`. uv needs no such package.
+
+   Either way, every command below runs *inside* the activated venv, which
+   does provide a plain `python`.
+
+   Developed and linted against Python 3.13 (`ruff.toml` targets `py313`);
+   Django 5.2 itself supports 3.10 and newer.
 
 2. **Install dependencies:**
 
    ```bash
-   pip install -r requirements.txt
+   uv pip install -r requirements.txt      # or: pip install -r requirements.txt
    ```
 
 3. **Create your local environment file:**
