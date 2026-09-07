@@ -31,6 +31,54 @@ def test_members_belong_to_the_household(members, household):
     assert set(household.members.all()) == set(members)
 
 
+def test_suite_runs_against_an_in_memory_database_not_db_sqlite3():
+    """Issue #3, criterion 1's mechanism, not just its side effect.
+
+    The check in the issue (db.sqlite3's mtime is unchanged before/after a
+    run) proves this indirectly. This asserts the actual guarantee at
+    runtime: the connection the whole suite uses really is Django's
+    in-memory SQLite, not merely "some file that happens not to have been
+    written this time" -- which the mtime check alone couldn't tell apart
+    from, say, a differently-named-but-still-real database file.
+    """
+    # config/settings/test.py's source, before Django's test runner rewrites
+    # ":memory:" in-process into a shared-cache URI (which is why the live
+    # connection is checked separately below, not by re-reading `settings`).
+    test_settings_source = (
+        Path(__file__).resolve().parents[2] / "config" / "settings" / "test.py"
+    ).read_text()
+    assert '"ENGINE": "django.db.backends.sqlite3"' in test_settings_source
+    assert '"NAME": ":memory:"' in test_settings_source
+
+    # The live connection actually in use for this test.
+    assert connection.settings_dict["ENGINE"] == "django.db.backends.sqlite3"
+    assert connection.is_in_memory_db()
+    assert "db.sqlite3" not in str(connection.settings_dict.get("NAME") or "")
+
+
+def test_reference_date_is_a_monday():
+    """conftest.py's REFERENCE_DATE claims to be a stable Monday; later tasks'
+    cadence math (weekly/biweekly rotations) depends on that actually being
+    true, not just asserted in a comment."""
+    assert REFERENCE_DATE.strftime("%A") == "Monday"
+    assert REFERENCE_DATE.weekday() == 0
+
+
+@pytest.mark.parametrize("iteration", [1, 2])
+def test_each_test_gets_a_clean_database(iteration, make_member):
+    """Isolation, proven rather than just run twice by hand.
+
+    Two separate invocations of this same test create a member with the
+    exact same display_name. That only succeeds both times if whatever the
+    first invocation created was rolled back before the second ran --
+    exactly the guarantee issue #3's "run the suite twice" check is after,
+    demonstrated here without depending on file-level test ordering or a
+    second `pytest` process.
+    """
+    make_member("IsolationCheck")
+    assert Member.objects.filter(display_name="IsolationCheck").count() == 1
+
+
 class TestPinStorage:
     def test_pin_is_hashed_never_stored_in_plaintext(self, roommate):
         assert DEFAULT_PIN not in roommate.password
