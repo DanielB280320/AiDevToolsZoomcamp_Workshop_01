@@ -5,17 +5,14 @@ roommates on a fixed per-chore order and cadence, everyone signs in with a name
 and PIN, completions and misses are logged, and absences are skipped rather than
 counted as failures.
 
-**Status:** tasks 1-2 done — the project skeleton, layered settings and the
-`Household`/`Member` models exist and the first migration has been applied.
-Task 3 (test setup and fixtures) is next; there is no test suite yet, so the
-`pytest` commands below have nothing to run until it lands.
+**Status:** tasks 1-3 done. See the branch history for what has landed.
 
 Commands
 
 - `uv pip install -r requirements.txt` - install dependencies into `.venv/`
 - `source .venv/bin/activate` - activate the venv (all commands below assume it)
 - `pytest` - the whole suite
-- `pytest tests/test_home.py` - one test file
+- `pytest accounts/tests/test_models.py` - one test file
 - `ruff check .` / `ruff format .` - lint and format
 - `python manage.py runserver` - dev server (settings default to `config.settings.dev`)
 - `python manage.py migrate` - apply migrations
@@ -29,6 +26,9 @@ Layout
   Config comes from the environment via `.env` (see `.env.example`), never from
   a branch in code.
 - `accounts/` - `Household` and `Member`. `Member` is `AUTH_USER_MODEL`.
+- `conftest.py` - shared fixtures: `household`, `members` (five, one admin),
+  `admin_member`, `roommate`, `make_member`, and `frozen_clock` for the
+  date-driven logic. Tests live in `<app>/tests/`.
 - Later apps (`chores`, `schedule`, `core`) are laid out in `architecture.md` §2
   and do not exist yet.
 

@@ -9,5 +9,6 @@ gunicorn>=23.0
 # Dev & test
 pytest>=8.3
 pytest-django>=4.9
+freezegun>=1.5                # time travel for the date-driven schedule tests
 ruff>=0.9
 django-debug-toolbar>=5.0
