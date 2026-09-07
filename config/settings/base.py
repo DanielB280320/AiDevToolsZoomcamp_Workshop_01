@@ -108,6 +108,15 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.Member"
 
+AUTHENTICATION_BACKENDS = [
+    # Display name + PIN, checked against the standard hasher stack.
+    "accounts.backends.PinBackend",
+    # Kept second purely so group and per-object permissions still resolve in
+    # the Django admin. It declines every PIN sign-in: it requires a
+    # ``password`` kwarg, which PinBackend's callers do not send.
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
 ]
