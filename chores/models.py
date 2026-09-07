@@ -1,7 +1,7 @@
 import datetime as dt
 
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.urls import reverse
 
 
@@ -122,6 +122,30 @@ class Chore(models.Model):
             return date + dt.timedelta(weeks=steps)
         return add_months(date, steps)
 
+    @property
+    def rotation(self):
+        """The roommates in this chore's rotation, in their stored order."""
+        return [slot.member for slot in self.rotation_slots.select_related("member")]
+
+    @transaction.atomic
+    def set_rotation(self, members):
+        """Replace this chore's rotation with ``members``, in the order given.
+
+        Positions are rewritten dense from zero on every save rather than
+        patched in place, so there is no gap to reason about after someone is
+        taken out of the middle of a rota. Rewriting is safe because a slot
+        carries no history: plan.md §4's record lives on the turn rows, which
+        snapshot their assignee at generation time and are never rewritten from
+        the rotation (architecture.md §4).
+        """
+        self.rotation_slots.all().delete()
+        RotationSlot.objects.bulk_create(
+            [
+                RotationSlot(chore=self, member=member, position=index)
+                for index, member in enumerate(members)
+            ]
+        )
+
     def due_date_for_cycle(self, cycle_index):
         """Due date of cycle N, counted from the anchor.
 
@@ -131,3 +155,39 @@ class Chore(models.Model):
         28th.
         """
         return self.advance(self.anchor_date, cycle_index)
+
+
+class RotationSlot(models.Model):
+    """One roommate's place in one chore's rotation.
+
+    An explicit through model rather than reusing a household-wide member
+    order: plan.md §2 wants the bins and the bathroom to be able to run through
+    people differently, which a single shared order cannot express.
+
+    ``position`` is stored, not derived. Deriving it from ``joined_on`` or from
+    the display name would make the order an accident of when someone moved in
+    or what they are called, and would silently reshuffle a rota when a new
+    roommate arrives.
+    """
+
+    chore = models.ForeignKey(
+        Chore, on_delete=models.CASCADE, related_name="rotation_slots"
+    )
+    member = models.ForeignKey(
+        "accounts.Member", on_delete=models.CASCADE, related_name="rotation_slots"
+    )
+    position = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["chore", "position"], name="unique_position_per_chore"
+            ),
+            models.UniqueConstraint(
+                fields=["chore", "member"], name="unique_member_per_chore"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.chore.name} #{self.position}: {self.member.display_name}"

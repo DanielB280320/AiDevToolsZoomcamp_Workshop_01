@@ -7,5 +7,6 @@ urlpatterns = [
     path("chores/new/", views.chore_create, name="chore_create"),
     path("chores/<int:pk>/", views.chore_detail, name="chore_detail"),
     path("chores/<int:pk>/edit/", views.chore_edit, name="chore_edit"),
+    path("chores/<int:pk>/rotation/", views.chore_rotation, name="chore_rotation"),
     path("chores/<int:pk>/active/", views.chore_set_active, name="chore_set_active"),
 ]

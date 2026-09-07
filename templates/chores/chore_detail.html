@@ -9,6 +9,14 @@
     </div>
     {% if can_edit %}<a class="btn" href="{% url 'chore_edit' chore.pk %}">Edit</a>{% endif %}
   </div>
+  <p class="note">
+    {# Everyone can see the rota; only an admin sees the form on that page. #}
+    <a href="{% url 'chore_rotation' chore.pk %}">Rotation</a> —
+    {% with names=chore.rotation %}
+      {% if names %}{% for m in names %}{{ m.display_name }}{% if not forloop.last %} → {% endif %}{% endfor %}
+      {% else %}nobody yet{% endif %}
+    {% endwith %}
+  </p>
   {% if chore.description %}<p>{{ chore.description|linebreaksbr }}</p>{% endif %}
   {% if can_edit %}
     <form method="post" action="{% url 'chore_set_active' chore.pk %}">

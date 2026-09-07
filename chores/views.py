@@ -1,9 +1,10 @@
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from accounts.mixins import admin_required, household_of
-from chores.forms import ChoreForm
+from chores.forms import ChoreForm, RotationForm
 from chores.models import Chore
 
 
@@ -79,3 +80,42 @@ def chore_set_active(request, pk):
             f"“{chore.name}” archived. Past turns are kept; no new ones will be made.",
         )
     return redirect("chore_list")
+
+
+def chore_rotation(request, pk):
+    """Who does this chore, and in what order.
+
+    Readable by every roommate — plan.md §7 restricts changing the rota, not
+    seeing your place in it. The POST branch is admin-only.
+    """
+    chore = get_object_or_404(_household_chores(request), pk=pk)
+    can_edit = request.user.is_admin
+
+    if request.method == "POST":
+        if not can_edit:
+            raise PermissionDenied(
+                "Only a household admin can change a rotation. Ask one of them."
+            )
+        form = RotationForm(request.POST, chore=chore)
+        if form.is_valid():
+            order = form.save()
+            messages.success(
+                request,
+                f"Rotation for “{chore.name}” saved — {len(order)} in the rota."
+                if order
+                else f"“{chore.name}” now has nobody in its rotation.",
+            )
+            return redirect("chore_rotation", pk=chore.pk)
+    else:
+        form = RotationForm(chore=chore)
+
+    return render(
+        request,
+        "chores/chore_rotation.html",
+        {
+            "chore": chore,
+            "form": form,
+            "can_edit": can_edit,
+            "rotation": chore.rotation,
+        },
+    )

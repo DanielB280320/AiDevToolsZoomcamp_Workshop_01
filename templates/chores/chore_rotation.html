@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Rotation · {{ chore.name }}{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1>{{ chore.name }} rotation</h1>
+      <p class="lede">{{ chore.cadence_label }} · who takes it, and in what order</p>
+    </div>
+  </div>
+
+  {% if rotation %}
+    <ol class="stack rota">
+      {% for member in rotation %}<li class="row"><span class="row__name">{{ member.display_name }}</span></li>{% endfor %}
+    </ol>
+  {% else %}
+    <p class="empty">Nobody is in this rotation yet.</p>
+  {% endif %}
+
+  {% if can_edit %}
+    <h2>Change the order</h2>
+    <p class="note">Number them in the order they take it. Leave someone blank to keep them out of this rota.</p>
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      <ul class="stack">
+        {% for member, field in form.rows %}
+          <li class="row">
+            <label class="row__main" for="{{ field.id_for_label }}">
+              <span class="row__name">{{ member.display_name }}</span>
+              {% if member.is_admin %}<span class="tag">Admin</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      <button type="submit" class="btn">Save rotation</button>
+    </form>
+  {% endif %}
+
+  <p class="note"><a href="{{ chore.get_absolute_url }}">Back to {{ chore.name }}</a></p>
+{% endblock %}

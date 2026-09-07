@@ -12,7 +12,7 @@ One task at a time, from `_docs/tasks.md`, in order. Ship it, commit it, move on
    behaviour you added.
 3. **Check it.** Re-read the criteria, verify each one against running code,
    run `pytest`. Fix what is broken.
-4. **Commit and move to the next task.**
+4. **Commit, closed the issue and move to the next task.**
 
 The main session does this itself. Do not launch a subagent per step.
 
