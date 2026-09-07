@@ -1,6 +1,7 @@
 from django import forms
 
-from schedule.models import AwayPeriod
+from schedule.models import AwayPeriod, Turn, TurnStatus
+from schedule.services.transitions import TransitionRefused, swap_turns
 
 
 class AwayPeriodForm(forms.ModelForm):
@@ -64,3 +65,44 @@ class AwayPeriodForm(forms.ModelForm):
         if commit:
             away.save()
         return away
+
+
+class SwapForm(forms.Form):
+    """Offer one of your turns in exchange for someone else's.
+
+    Both sides are constrained to what is actually tradeable — your own pending
+    turns, and other people's — so the choice is made from a list rather than
+    validated after the fact.
+    """
+
+    mine = forms.ModelChoiceField(queryset=Turn.objects.none(), label="Your turn")
+    theirs = forms.ModelChoiceField(queryset=Turn.objects.none(), label="Swap it for")
+
+    def __init__(self, *args, actor, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.actor = actor
+        tradeable = (
+            Turn.objects.for_household(actor.household)
+            # Both sides of a trade, not just the row that happens to carry
+            # the link: the partner has swapped_from set instead, and offering
+            # it would show a choice the service is only going to refuse.
+            .filter(
+                status=TurnStatus.PENDING,
+                swapped_with__isnull=True,
+                swapped_from__isnull=True,
+            )
+            .select_related("chore", "assignee")
+            .order_by("due_date")
+        )
+        self.fields["mine"].queryset = tradeable.filter(assignee=actor)
+        self.fields["theirs"].queryset = tradeable.exclude(assignee=actor)
+
+    def clean(self):
+        cleaned = super().clean()
+        mine, theirs = cleaned.get("mine"), cleaned.get("theirs")
+        if mine and theirs:
+            try:
+                swap_turns(mine, theirs)
+            except TransitionRefused as refusal:
+                raise forms.ValidationError(str(refusal)) from refusal
+        return cleaned

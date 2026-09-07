@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.mixins import household_of
-from schedule.forms import AwayPeriodForm
+from schedule.forms import AwayPeriodForm, SwapForm
 from schedule.models import AwayPeriod, Turn
 from schedule.services.transitions import TransitionRefused, complete_turn
 
@@ -84,3 +84,37 @@ def away_delete(request, pk):
     away.delete()
     messages.success(request, "Absence removed.")
     return redirect("away_list")
+
+
+@require_http_methods(["GET", "POST"])
+def swap_list(request):
+    """Trade a turn with a flatmate.
+
+    The swap happens in the form's clean(), so a refusal comes back as a form
+    error on the page the roommate is already looking at rather than as a
+    redirect carrying a message about something they can no longer see.
+    """
+    form = SwapForm(request.POST or None, actor=request.user)
+
+    if request.method == "POST" and form.is_valid():
+        mine, theirs = form.cleaned_data["mine"], form.cleaned_data["theirs"]
+        messages.success(
+            request,
+            f"Swapped. You now have “{mine.chore.name}” on {mine.due_date}; "
+            f"{theirs.assignee.display_name} takes “{theirs.chore.name}” "
+            f"on {theirs.due_date}.",
+        )
+        return redirect("swap_list")
+
+    household = household_of(request)
+    swapped = (
+        Turn.objects.for_household(household)
+        .filter(swapped_with__isnull=False)
+        .select_related("chore", "assignee", "swapped_with__assignee")
+        .order_by("-due_date")
+    )
+    return render(
+        request,
+        "schedule/swap_list.html",
+        {"form": form, "swapped": swapped},
+    )

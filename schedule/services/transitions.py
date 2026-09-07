@@ -201,3 +201,55 @@ def skip_away_turns(queryset=None, *, today=None):
             break
 
     return skipped, reassigned
+
+
+@transaction.atomic
+def swap_turns(first, second):
+    """Trade the assignees of two turns. Returns the pair, refreshed.
+
+    plan.md §8 asks for swapping alongside skipping, and §4's accountability
+    goal means the trade should be *recorded* rather than silently rewriting who
+    was assigned — so the two rows are linked, and the swap stays visible in
+    history rather than looking like the rota was always that way.
+
+    Both turns stay PENDING. Only the assignee moves. (architecture.md §4's
+    prose and tasks.md §19 both say so; its state diagram shows a SWAPPED state
+    instead. Following the two that agree — a turn still has to be done by
+    somebody, so retiring it into a terminal state would lose the work.)
+    """
+    if first.pk == second.pk:
+        raise TransitionRefused("A turn cannot be swapped with itself.")
+
+    # Deterministic lock order, so two swaps racing over the same pair cannot
+    # deadlock by taking the rows in opposite orders.
+    low, high = sorted([first.pk, second.pk])
+    locked = {
+        turn.pk: turn
+        for turn in Turn.objects.select_for_update()
+        .select_related("chore", "assignee")
+        .filter(pk__in=[low, high])
+    }
+    first, second = locked[first.pk], locked[second.pk]
+
+    if first.chore.household_id != second.chore.household_id:
+        raise TransitionRefused("Those turns belong to different households.")
+
+    for turn in (first, second):
+        if turn.status != TurnStatus.PENDING:
+            raise TransitionRefused(
+                f"“{turn.chore.name}” on {turn.due_date} is already "
+                f"{turn.get_status_display().lower()} and cannot be swapped."
+            )
+        if turn.swap_partner is not None:
+            raise TransitionRefused(
+                f"“{turn.chore.name}” on {turn.due_date} has already been swapped."
+            )
+
+    if first.assignee_id == second.assignee_id:
+        raise TransitionRefused("Both turns already belong to the same person.")
+
+    first.assignee, second.assignee = second.assignee, first.assignee
+    first.swapped_with = second
+    first.save(update_fields=["assignee", "swapped_with"])
+    second.save(update_fields=["assignee"])
+    return first, second

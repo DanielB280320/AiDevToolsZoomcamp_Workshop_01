@@ -26,3 +26,9 @@ through, or promoted to a real task when one of them starts to matter.
   collected; and a `git add -A` swept a leftover QA scratch file
   (`test_zzqa_round4_probe.py`) into the repo. Prefer naming paths on `git add`,
   and check `testpaths` when adding tests to a new app.
+- `architecture.md` §4 contradicts itself on swaps: its state diagram (line 157)
+  shows `PENDING --> SWAPPED : two members trade turns`, while its prose (line
+  173) says "Both turns stay `PENDING`; only the assignee moves." `tasks.md` §19
+  agrees with the prose, so task 19 followed the two that agree and left the
+  `SWAPPED` status defined but unused. Worth reconciling the diagram, or finding
+  a use for the status.

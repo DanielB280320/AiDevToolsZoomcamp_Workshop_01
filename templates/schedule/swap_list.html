@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Swaps · Chores{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1>Swap a turn</h1>
+      <p class="lede">Trade one of yours for someone else's. Both stay on the rota — only who does them moves.</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <form method="post" class="card card--narrow">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <ul class="form-errors">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% for field in form %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for e in field.errors %}<p class="field__error">{{ e }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn">Swap</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Trades so far</h2>
+    <p class="note">Kept on the record rather than erased, so a rota that looks odd has an explanation.</p>
+    <ul class="stack">
+      {% for turn in swapped %}
+        <li class="row">
+          <div class="row__main">
+            <span class="row__name">{{ turn.chore.name }} · {{ turn.due_date }}</span>
+            <span class="row__meta">
+              {{ turn.assignee.display_name }} traded with
+              {{ turn.swapped_with.assignee.display_name }}
+              ({{ turn.swapped_with.chore.name }}, {{ turn.swapped_with.due_date }})
+            </span>
+          </div>
+        </li>
+      {% empty %}
+        <li class="empty">No swaps yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}

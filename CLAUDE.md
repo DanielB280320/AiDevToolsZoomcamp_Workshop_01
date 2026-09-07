@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–18 are done and committed. Next task: 19.**
+**Tasks 1–19 are done and committed. Next task: 20.**
 
-Do not re-implement, re-groom or re-verify tasks 1–18. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–19. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -45,8 +45,7 @@ a few minutes, build it, check it, commit it, next. One session does all of it
   `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
   `<app>/tests/`.
 - `schedule/` — `Turn` (11), `services/generation.py` (12) and
-  `services/transitions.py` (14, 15, 18) and `AwayPeriod` (17). Swaps land
-  in task 19.
+  `services/transitions.py` (14, 15, 18, 19) and `AwayPeriod` (17).
 
 ## Docs
 

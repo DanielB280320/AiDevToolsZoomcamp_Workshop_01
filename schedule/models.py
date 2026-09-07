@@ -144,6 +144,18 @@ class Turn(models.Model):
         return self.status in TERMINAL_STATUSES
 
     @property
+    def swap_partner(self):
+        """The turn this one was traded with, from whichever side holds the link.
+
+        Only one row carries ``swapped_with``; asking either turn should still
+        answer, or the trade would only be visible to whoever happened to
+        initiate it.
+        """
+        if self.swapped_with_id:
+            return self.swapped_with
+        return getattr(self, "swapped_from", None)
+
+    @property
     def was_covered(self):
         """True when someone other than the assignee did it."""
         return (
