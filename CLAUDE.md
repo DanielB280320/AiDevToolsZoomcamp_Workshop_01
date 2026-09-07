@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–16 are done and committed. Next task: 17.**
+**Tasks 1–17 are done and committed. Next task: 18.**
 
-Do not re-implement, re-groom or re-verify tasks 1–16. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–17. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -40,11 +40,13 @@ a few minutes, build it, check it, commit it, next. One session does all of it
 - `accounts/` — `Household` and `Member`. `Member` is `AUTH_USER_MODEL`.
 - `chores/` — chore definitions, and each chore's own rotation order.
 - `core/` — the home screen (task 16).
-- `conftest.py` — shared fixtures: `household`, `members` (five, one admin),
+- `conftest.py` — shared fixtures: `household`, `members` (five; **`members[0]`
+  is the admin**, `members[1]` onwards are not),
   `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
   `<app>/tests/`.
 - `schedule/` — `Turn` (11), `services/generation.py` (12) and
-  `services/transitions.py` (14, 15). Skip and swap land in 18 and 19.
+  `services/transitions.py` (14, 15) and `AwayPeriod` (17). Skip and swap
+  land in 18 and 19.
 
 ## Docs
 

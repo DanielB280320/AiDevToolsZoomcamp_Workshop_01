@@ -1,9 +1,12 @@
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
-from django.views.decorators.http import require_POST
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.mixins import household_of
-from schedule.models import Turn
+from schedule.forms import AwayPeriodForm
+from schedule.models import AwayPeriod, Turn
 from schedule.services.transitions import TransitionRefused, complete_turn
 
 
@@ -31,3 +34,53 @@ def turn_complete(request, pk):
                 f"{turn.completed_by.display_name}.",
             )
     return redirect(request.POST.get("next") or turn.chore.get_absolute_url())
+
+
+@require_http_methods(["GET", "POST"])
+def away_list(request):
+    """Absences for the whole household, and the form to declare one.
+
+    Everyone sees everyone's: the rota is shared, so knowing who is away next
+    week is ordinary household information rather than something private.
+    """
+    household = household_of(request)
+    form = AwayPeriodForm(request.POST or None, actor=request.user)
+
+    if request.method == "POST" and form.is_valid():
+        away = form.save()
+        if away.declared_on_their_behalf:
+            messages.success(
+                request,
+                f"Recorded {away.member.display_name} away "
+                f"{away.start_date} to {away.end_date}.",
+            )
+        else:
+            messages.success(
+                request, f"You are down as away {away.start_date} to {away.end_date}."
+            )
+        return redirect("away_list")
+
+    periods = (
+        AwayPeriod.objects.for_household(household)
+        .select_related("member", "created_by")
+        .order_by("-start_date")
+    )
+    return render(
+        request,
+        "schedule/away_list.html",
+        {"form": form, "periods": periods, "today": timezone.localdate()},
+    )
+
+
+@require_POST
+def away_delete(request, pk):
+    """Cancel an absence. Yours, or anyone's if you are an admin."""
+    away = get_object_or_404(
+        AwayPeriod.objects.for_household(household_of(request)), pk=pk
+    )
+    if away.member_id != request.user.pk and not request.user.is_admin:
+        raise PermissionDenied("You can only cancel your own time away.")
+
+    away.delete()
+    messages.success(request, "Absence removed.")
+    return redirect("away_list")

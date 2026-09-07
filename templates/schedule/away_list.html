@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Away · Chores{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1>Time away</h1>
+      <p class="lede">A chore falling while you are away is skipped, not counted against you.</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2>Declare an absence</h2>
+    <form method="post" class="card card--narrow">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <ul class="form-errors">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% for field in form %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<p class="field__help">{{ field.help_text }}</p>{% endif %}
+          {% for e in field.errors %}<p class="field__error">{{ e }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn">Save</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Booked</h2>
+    <ul class="stack">
+      {% for period in periods %}
+        <li class="row {% if period.end_date < today %}row--muted{% endif %}">
+          <div class="row__main">
+            <span class="row__name">{{ period.member.display_name }}</span>
+            <span class="row__meta">
+              {{ period.start_date }} to {{ period.end_date }}
+              {% if period.reason %} · {{ period.reason }}{% endif %}
+              {% if period.declared_on_their_behalf %}
+                <span class="tag tag--quiet">added by {{ period.created_by.display_name }}</span>
+              {% endif %}
+              {% if period.end_date < today %}<span class="tag tag--quiet">past</span>{% endif %}
+            </span>
+          </div>
+          {% if period.member_id == user.pk or user.is_admin %}
+            <form method="post" action="{% url 'away_delete' period.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn--link">Cancel</button>
+            </form>
+          {% endif %}
+        </li>
+      {% empty %}
+        <li class="empty">Nobody has declared any time away.</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}

@@ -135,3 +135,64 @@ class Turn(models.Model):
     def deadline(self):
         """The last day this can be done before it counts as missed."""
         return self.due_date + dt.timedelta(days=self.chore.grace_days)
+
+
+class AwayPeriodQuerySet(models.QuerySet):
+    def for_household(self, household):
+        return self.filter(member__household=household)
+
+    def covering(self, date):
+        return self.filter(start_date__lte=date, end_date__gte=date)
+
+
+class AwayPeriod(models.Model):
+    """Dates a roommate will not be here.
+
+    plan.md §8 requires away handling, and leaves open who gets to mark someone
+    away. Answered by allowing both: a roommate declares their own, and an admin
+    can enter one on their behalf for the person who is already on a plane.
+    ``created_by`` records which of the two it was, so "I never said I was away"
+    has an answer.
+
+    Recording only. Its effect on the schedule is task 18.
+    """
+
+    member = models.ForeignKey(
+        "accounts.Member", on_delete=models.CASCADE, related_name="away_periods"
+    )
+    start_date = models.DateField()
+    end_date = models.DateField(help_text="Inclusive — the last day you are away.")
+    reason = models.CharField(max_length=200, blank=True)
+
+    # Nullable so a first-run seed or a management command can create one
+    # without inventing an actor.
+    created_by = models.ForeignKey(
+        "accounts.Member",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="away_periods_declared",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = AwayPeriodQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="away_period_ends_after_it_starts",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.member.display_name} away {self.start_date} to {self.end_date}"
+
+    def covers(self, date):
+        """Is ``date`` inside this absence? Both ends inclusive."""
+        return self.start_date <= date <= self.end_date
+
+    @property
+    def declared_on_their_behalf(self):
+        return self.created_by_id is not None and self.created_by_id != self.member_id
