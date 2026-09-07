@@ -1,11 +1,105 @@
 {% extends "base.html" %}
-
 {% block title %}Home · Chores{% endblock %}
 
 {% block content %}
-  <h1>Hello, {{ user.display_name }}</h1>
-  <p class="lede">
-    Your chores will appear here. This screen is built in task 16, once there
-    are chores and turns to show.
-  </p>
+  <div class="page-head">
+    <div>
+      <h1>Hello, {{ user.display_name }}</h1>
+      <p class="lede">
+        {% if mine_today %}You have something to do today.
+        {% elif my_overdue_count %}You are behind on {{ my_overdue_count }} chore{{ my_overdue_count|pluralize }}.
+        {% else %}Nothing owed right now.{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {# Overdue first and loudest. plan.md §6 makes this screen the only reminder
+     channel, so late work cannot be something you scroll to find. #}
+  {% if overdue %}
+    <section class="panel panel--danger">
+      <h2>Overdue <span class="tag tag--bad">{{ overdue|length }}</span></h2>
+      <p class="note">Everyone can see these. That is the point.</p>
+      <ul class="stack">
+        {% for turn in overdue %}
+          <li class="row row--danger">
+            <div class="row__main">
+              <span class="row__name">{{ turn.chore.name }}</span>
+              <span class="row__meta">
+                {{ turn.assignee.display_name }} · was due {{ turn.due_date }}
+              </span>
+            </div>
+            <form method="post" action="{% url 'turn_complete' turn.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <button type="submit" class="btn">Done</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Yours</h2>
+    {% if mine_today %}
+      <ul class="stack">
+        {% for turn in mine_today %}
+          <li class="row row--due">
+            <div class="row__main">
+              <span class="row__name">{{ turn.chore.name }}</span>
+              <span class="row__meta">
+                {% if turn.due_date == today %}due today{% else %}due {{ turn.due_date }}{% endif %}
+              </span>
+            </div>
+            <form method="post" action="{% url 'turn_complete' turn.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <button type="submit" class="btn">Done</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">Nothing of yours is due today.</p>
+    {% endif %}
+
+    {% if mine_upcoming %}
+      <h3>Coming up for you</h3>
+      <ul class="stack">
+        {% for turn in mine_upcoming|slice:":5" %}
+          <li class="row row--muted">
+            <div class="row__main">
+              <span class="row__name">{{ turn.chore.name }}</span>
+              <span class="row__meta">due {{ turn.due_date }}</span>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+
+  {% if due_soon %}
+    <section class="panel">
+      <h2>Due soon, elsewhere in the flat</h2>
+      <ul class="stack">
+        {% for turn in due_soon %}
+          <li class="row row--muted">
+            <div class="row__main">
+              <span class="row__name">{{ turn.chore.name }}</span>
+              <span class="row__meta">
+                {{ turn.assignee.display_name }} · due {{ turn.due_date }}
+              </span>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if not overdue and not mine_today and not mine_upcoming and not due_soon %}
+    <p class="empty">
+      No turns yet. An admin sets up chores and their rotations on the
+      <a href="{% url 'chore_list' %}">chores page</a>.
+    </p>
+  {% endif %}
 {% endblock %}

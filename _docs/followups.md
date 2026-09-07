@@ -21,3 +21,8 @@ through, or promoted to a real task when one of them starts to matter.
   would have turned "two people racing" into "one person tapping twice". No
   other test currently takes two such fixtures, but it is an easy trap to
   re-enter — a second session needs its own `Client()`.
+- Two things that hid work from the suite, both now fixed but worth knowing:
+  `pytest.ini`'s `testpaths` did not list `core`, so `core/tests/` was never
+  collected; and a `git add -A` swept a leftover QA scratch file
+  (`test_zzqa_round4_probe.py`) into the repo. Prefer naming paths on `git add`,
+  and check `testpaths` when adding tests to a new app.
