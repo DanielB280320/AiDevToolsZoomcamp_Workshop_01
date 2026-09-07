@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–17 are done and committed. Next task: 18.**
+**Tasks 1–18 are done and committed. Next task: 19.**
 
-Do not re-implement, re-groom or re-verify tasks 1–17. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–18. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -45,8 +45,8 @@ a few minutes, build it, check it, commit it, next. One session does all of it
   `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
   `<app>/tests/`.
 - `schedule/` — `Turn` (11), `services/generation.py` (12) and
-  `services/transitions.py` (14, 15) and `AwayPeriod` (17). Skip and swap
-  land in 18 and 19.
+  `services/transitions.py` (14, 15, 18) and `AwayPeriod` (17). Swaps land
+  in task 19.
 
 ## Docs
 
@@ -75,7 +75,9 @@ and expensive to retrofit):
   not rewrite who was responsible in the past. `schedule/tests/
   test_history_survives_membership_changes.py` is the canary for this — if a
   change makes it fail, the change is wrong, not the test.
-- `SKIPPED_AWAY` is its own terminal status, not a flavour of `MISSED`.
+- `SKIPPED_AWAY` is its own terminal status, not a flavour of `MISSED`. A
+  skipped turn keeps its row and the replacement is a second row for the same
+  cycle — hence the *partial* unique constraint on `(chore, cycle_index)`.
 - Scope every queryset through `request.user.household`. Never trust a PK from
   the URL without filtering by household first.
 - Turn generation and overdue marking are idempotent — they run on cron *and*

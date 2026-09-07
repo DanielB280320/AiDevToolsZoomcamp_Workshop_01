@@ -11,7 +11,7 @@ import datetime as dt
 from django.db import transaction
 from django.utils import timezone
 
-from schedule.models import TERMINAL_STATUSES, Turn, TurnStatus
+from schedule.models import TERMINAL_STATUSES, AwayPeriod, Turn, TurnStatus
 
 
 class TransitionRefused(Exception):
@@ -95,6 +95,109 @@ def refresh_household(household, *, today=None):
     """
     from schedule.services.generation import generate_for_household
 
+    scoped = Turn.objects.for_household(household)
     created = generate_for_household(household, today=today)
-    missed = mark_overdue(Turn.objects.for_household(household), today=today)
+    # Skipping runs before overdue marking, and the order is load-bearing:
+    # marking first would stamp MISSED on a turn whose assignee was away, which
+    # is exactly the accusation plan.md §8 exists to prevent.
+    skip_away_turns(scoped, today=today)
+    missed = mark_overdue(scoped, today=today)
     return len(created), missed
+
+
+def _rotation_order_from(chore, member):
+    """The chore's rotation, starting at whoever comes *after* ``member``.
+
+    If the assignee is no longer in the rotation — they left, or an admin took
+    them out — the walk starts at the top instead. Their turn still has to go
+    somewhere.
+    """
+    rotation = chore.rotation
+    if not rotation:
+        return []
+    ids = [m.pk for m in rotation]
+    start = ids.index(member.pk) + 1 if member.pk in ids else 0
+    return rotation[start:] + rotation[:start]
+
+
+def _is_away(member, date, absences):
+    return any(
+        period.member_id == member.pk and period.covers(date) for period in absences
+    )
+
+
+@transaction.atomic
+def skip_away_turns(queryset=None, *, today=None):
+    """Hand on turns falling inside their assignee's declared absence.
+
+    Returns ``(skipped, reassigned)``.
+
+    plan.md §8 is explicit that a planned absence must be distinguishable from a
+    genuine miss, so the original turn goes to SKIPPED_AWAY — its own terminal
+    status — rather than being quietly reassigned and forgotten. Otherwise §4's
+    record would blame someone for a chore they were never due to do.
+
+    Passing it to the next roommate rather than leaving it undone answers the
+    spec's open question: the household should not go without a clean bathroom
+    because one person is on holiday.
+
+    Idempotent. A turn already SKIPPED_AWAY is terminal and is never revisited,
+    and a cycle that already has a live replacement is left alone.
+    """
+    today = today or timezone.localdate()
+    turns = Turn.objects.all() if queryset is None else queryset
+
+    candidates = list(
+        turns.filter(status=TurnStatus.PENDING)
+        .select_related("chore", "assignee")
+        .order_by("due_date")
+    )
+    if not candidates:
+        return 0, 0
+
+    # One query for every absence that could matter, rather than one per turn.
+    # "Could matter" includes everyone in the affected rotations, not only the
+    # current assignees: the whole point is to hand a turn on, and deciding
+    # whether the *next* person is free needs their absences loaded too.
+    relevant_members = {t.assignee_id for t in candidates}
+    for chore in {t.chore for t in candidates}:
+        relevant_members.update(m.pk for m in chore.rotation)
+
+    absences = list(
+        AwayPeriod.objects.filter(
+            member__in=relevant_members,
+            start_date__lte=max(t.due_date for t in candidates),
+            end_date__gte=min(t.due_date for t in candidates),
+        )
+    )
+    if not absences:
+        return 0, 0
+
+    skipped = reassigned = 0
+    for turn in candidates:
+        if not _is_away(turn.assignee, turn.due_date, absences):
+            continue
+
+        turn.status = TurnStatus.SKIPPED_AWAY
+        turn.save(update_fields=["status"])
+        skipped += 1
+
+        # Hand it on to the first person in the rotation who is actually here.
+        # If the next one is away too, keep walking; if the whole flat is away,
+        # nobody takes it and the cycle simply goes undone -- which is honest,
+        # and still not anybody's failure.
+        for candidate in _rotation_order_from(turn.chore, turn.assignee):
+            if _is_away(candidate, turn.due_date, absences):
+                continue
+            Turn.objects.create(
+                chore=turn.chore,
+                assignee=candidate,
+                cycle_index=turn.cycle_index,
+                period_start=turn.period_start,
+                due_date=turn.due_date,
+                replaces=turn,
+            )
+            reassigned += 1
+            break
+
+    return skipped, reassigned

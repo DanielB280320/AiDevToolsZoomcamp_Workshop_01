@@ -97,6 +97,17 @@ class Turn(models.Model):
         help_text="The turn this one was traded with (task 19).",
     )
 
+    # The absence this turn was handed on from (task 18). Distinct from
+    # swapped_with, which is a trade between two people who both keep a turn.
+    replaces = models.OneToOneField(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replaced_by",
+        help_text="The skipped turn this one took over from.",
+    )
+
     note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -109,8 +120,16 @@ class Turn(models.Model):
             # on cron *and* lazily on dashboard load, so two runs racing must
             # collide harmlessly at the database rather than double-book a
             # cycle.
+            # One *live* turn per chore per cycle. Skipped ones are excluded
+            # because task 18 has to keep both halves of the story: the turn
+            # that fell during someone's absence, and the replacement that
+            # passed to the next roommate. Collapsing those into one row would
+            # mean either losing the record of the absence or pretending the
+            # chore was never reassigned.
             models.UniqueConstraint(
-                fields=["chore", "cycle_index"], name="unique_turn_per_chore_cycle"
+                fields=["chore", "cycle_index"],
+                condition=~models.Q(status="SKIPPED_AWAY"),
+                name="unique_live_turn_per_chore_cycle",
             ),
         ]
         indexes = [
