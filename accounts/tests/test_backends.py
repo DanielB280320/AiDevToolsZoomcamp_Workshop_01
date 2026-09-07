@@ -86,6 +86,37 @@ class TestRejection:
         )
 
 
+def test_authenticate_dispatch_falls_through_from_pinbackend_to_modelbackend():
+    """QA gap on task 4's first pass: the tests above prove PinBackend
+    declines a household-less account, and separately that ModelBackend
+    accepts the same credentials in isolation -- neither proves the actual
+    entry point /admin/'s login view uses, the top-level
+    django.contrib.auth.authenticate() dispatcher, genuinely falls through
+    from one configured backend to the next for the same call.
+
+    This calls only that dispatcher, with the username=/password= kwargs
+    the admin login form sends, against an operator PinBackend must decline
+    (no household) and only ModelBackend (second in AUTHENTICATION_BACKENDS,
+    config/settings/base.py) can accept -- so this can only pass if the
+    fall-through genuinely happens.
+    """
+    operator = Member.objects.create_superuser(
+        display_name="DispatchOp", password="an-operator-password-123"
+    )
+    # Sanity check the premise: PinBackend alone declines this account.
+    assert (
+        PinBackend().authenticate(
+            None, username="DispatchOp", password="an-operator-password-123"
+        )
+        is None
+    )
+    # The real entry point still succeeds, by falling through to ModelBackend.
+    assert (
+        authenticate(None, username="DispatchOp", password="an-operator-password-123")
+        == operator
+    )
+
+
 def test_unknown_name_still_hashes(members):
     """An early return for an unknown name would make the response measurably
     faster than for a known one, which is enough to enumerate the household.
@@ -123,6 +154,38 @@ class TestPinValidation:
     @pytest.mark.parametrize("good", ["918273", "1234567", "000000"])
     def test_six_or_more_digits_accepted(self, good):
         validate_pin(good)
+
+
+class TestValidatePinNeverLeaksTheRawPin:
+    """Task 4, criterion 9's grep for logger./print( calls would not catch a
+    PIN embedded in a raised exception's own message. validate_pin's three
+    ValidationErrors don't interpolate the raw value today, but nothing
+    stops someone adding params={"value": value} later, the way
+    validate_timezone (right above it in accounts/validators.py) already
+    does for its own argument.
+
+    Each PIN below is deliberately distinctive -- not a substring of the
+    static wording, which itself interpolates PIN_MIN_LENGTH (6) and
+    PIN_MAX_LENGTH (12) -- so this can only pass by coincidence if the raw
+    PIN genuinely never appears in the message text, and fails immediately
+    if a future change starts echoing it back (verified by temporarily
+    reproducing that regression by hand: params={"value": value} in the
+    "not digits only" branch makes this exact assertion fail).
+    """
+
+    @pytest.mark.parametrize(
+        "bad_pin",
+        [
+            "ZzMarkerNotDigits",  # not-digits-only branch
+            "24681",  # too-short branch
+            "888888888888888",  # too-long branch
+        ],
+    )
+    def test_rejected_pin_does_not_appear_in_the_error_message(self, bad_pin):
+        with pytest.raises(ValidationError) as excinfo:
+            validate_pin(bad_pin)
+        message = " ".join(excinfo.value.messages)
+        assert bad_pin not in message
 
 
 class TestSixDigitMinimumEnforcedEverywhere:
