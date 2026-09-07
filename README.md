@@ -16,12 +16,16 @@ We don't specify anything else, and most of you will finish with different homew
 
 In this homework, we want to turn this vague description into a clear specification.
 
+---
+
 ## Question 1: Select your coding agent
 
 You can use any coding agent you want. Which one did you choose?  
 
-**Answer: Claude Code** (Opus 5) — used for the whole project: spec, backlog, all 23
+**Answer: `Claude Code`** (Opus 5) — used for the whole project: spec, backlog, all 23
 tasks, tests and commits. Prompt log: [`others/prompts_track.md`](others/prompts_track.md).
+
+---
 
 ## Question 2: Turn the idea into a spec
 
@@ -42,6 +46,8 @@ What are the 2-4 features your spec settled on?
 
 Spec: [`_docs/plan.md`](_docs/plan.md). It settled on **four** features:
 
+**Answer:**
+
 1. **Fixed per-chore rotation and cadence** (§2) — each chore has its own roommate
    order and frequency; turns are generated eight weeks ahead.
 2. **Name + PIN sign-in with admin roles** (§5, §7) — no email or signup; only admins
@@ -60,6 +66,8 @@ Create an empty GitHub repository, clone it locally. Create two files there:
 - `_docs/plan.md` with the plan
 
 Commit and push.
+
+---
 
 ## Question 3: Django project
 
@@ -84,6 +92,8 @@ LOCAL_APPS = ["accounts", "chores", "schedule", "core"]
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
 ```
 
+---
+
 ## Question 4: Backlog
 
 Then give your agent the `plan.md` and ask it to propose a small backlog of tasks for building this in Django. Write the result to `backlog.md`.
@@ -92,10 +102,12 @@ What's task 1 in the backlog your agent came up with?
 
 Backlog: [`_docs/tasks.md`](_docs/tasks.md), 23 ordered tasks.
 
-**Task 1 — "Project skeleton and shared persistent storage":** a runnable Django project
+**Answer: `Task 1 — "Project skeleton and shared persistent storage`:** a runnable Django project
 with `dev`/`prod`/`test` settings reading `SECRET_KEY` and `DATABASE_URL` from `.env`, on
 SQLite with a documented path to PostgreSQL, and an explicit timezone. It is first
 because `plan.md` §9 requires one shared server-side database.
+
+---
 
 ## Question 5: First version
 
@@ -115,6 +127,8 @@ Run the server. Which command do you use to start the Django development server?
 **Answer: `uv run python manage.py runserver`** — the dev server is a `manage.py`
 subcommand. Here the venv is activated first, so it is `python manage.py runserver`
 (settings default to `config.settings.dev`).
+
+---
 
 ## Question 6: Tests
 
