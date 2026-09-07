@@ -22,7 +22,7 @@ In this homework, we want to turn this vague description into a clear specificat
 
 You can use any coding agent you want. Which one did you choose?  
 
-**Answer: `Claude Code`** (Opus 5) — used for the whole project: spec, backlog, all 23
+**Answer: `Claude Code (Opus 5)`** — used for the whole project: spec, backlog, all 23
 tasks, tests and commits. Prompt log: [`others/prompts_track.md`](others/prompts_track.md).
 
 ---
