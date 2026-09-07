@@ -1,18 +1,13 @@
 ## Goal
 
-One or two sentences on what should be true when this is done.
+One sentence: what is true when this is done.
 
 ## Acceptance criteria
 
-- [ ] A statement you can check by looking at the result
-- [ ] One line per case, including the awkward ones
+- [ ] 3–6 statements you can check by looking at the result
+- [ ] Only what this task needs — extras go to `_docs/followups.md`
 
-## Out of scope
+## Notes
 
-- Something that does not belong in this task, moved to #TASK-NUMBER
-
-## Constraints
-
-- Files this should stay inside
-- Libraries to use
-- Guidelines to follow
+Files to stay inside, or a decision worth recording. Skip if there is nothing
+to say.

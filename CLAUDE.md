@@ -5,67 +5,77 @@ roommates on a fixed per-chore order and cadence, everyone signs in with a name
 and PIN, completions and misses are logged, and absences are skipped rather than
 counted as failures.
 
-**Status:** tasks 1-3 done. See the branch history for what has landed.
+## Status
 
-Commands
+**Tasks 1–7 are done and committed. Task 8 landed as a scaffold. Next task: 8
+(confirm) then 9.**
 
-- `uv pip install -r requirements.txt` - install dependencies into `.venv/`
-- `source .venv/bin/activate` - activate the venv (all commands below assume it)
-- `pytest` - the whole suite
-- `pytest accounts/tests/test_models.py` - one test file
-- `ruff check .` / `ruff format .` - lint and format
-- `python manage.py runserver` - dev server (settings default to `config.settings.dev`)
-- `python manage.py migrate` - apply migrations
-- `python manage.py check --deploy` - production config check (needs
-  `DJANGO_SETTINGS_MODULE=config.settings.prod`, `SECRET_KEY` and `ALLOWED_HOSTS`)
+Do not re-implement, re-groom or re-verify tasks 1–7. They shipped, the suite
+is green, and re-opening them is what stalled this project once already. If a
+finished task turns out to have a real bug that blocks the task in front of
+you, fix that bug narrowly and move on.
 
-Layout
+Read `_docs/process.md` before starting a task. The short version: frame it in
+a few minutes, build it, check it, commit it, next. One session does all of it
+— no per-task subagent pipeline.
 
-- `config/settings/` - `base.py` holds everything shared; `dev.py` and `prod.py`
-  override. `manage.py` defaults to dev, `wsgi.py`/`asgi.py` default to prod.
-  Config comes from the environment via `.env` (see `.env.example`), never from
-  a branch in code.
-- `accounts/` - `Household` and `Member`. `Member` is `AUTH_USER_MODEL`.
-- `conftest.py` - shared fixtures: `household`, `members` (five, one admin),
-  `admin_member`, `roommate`, `make_member`, and `frozen_clock` for the
-  date-driven logic. Tests live in `<app>/tests/`.
-- Later apps (`chores`, `schedule`, `core`) are laid out in `architecture.md` §2
-  and do not exist yet.
+## Commands
 
-Docs
+- `uv pip install -r requirements.txt` — install dependencies into `.venv/`
+- `source .venv/bin/activate` — activate the venv (assumed below)
+- `pytest` — the whole suite
+- `pytest accounts/tests/test_models.py` — one test file
+- `ruff check .` / `ruff format .` — lint and format
+- `python manage.py runserver` — dev server (settings default to `config.settings.dev`)
+- `python manage.py migrate` — apply migrations
+- `python manage.py check --deploy` — production check (needs
+  `DJANGO_SETTINGS_MODULE=config.settings.prod`, `SECRET_KEY`, `ALLOWED_HOSTS`)
 
-- `_docs/process.md` - how work is organized
-- `_docs/plan.md` - the product spec. Every scoping decision, with the
-  alternatives rejected and why. The source of truth for *what* to build.
-- `_docs/architecture.md` - the Django design: app layout, data model, the
-  scheduling engine, auth. The source of truth for *how*.
-- `_docs/tasks.md` - the ordered backlog, 23 tasks, each tracing back to a
-  `plan.md` section.
-- `others/prompts_track.md` - a running log of the prompts used on this project.
-  Append to it when the user asks to track a prompt; do not rewrite past entries.
+## Layout
 
-Rules
+- `config/settings/` — `base.py` is shared; `dev.py`/`prod.py` override.
+  `manage.py` defaults to dev, `wsgi.py`/`asgi.py` to prod. Config comes from
+  the environment via `.env` (see `.env.example`), never from a branch in code.
+- `accounts/` — `Household` and `Member`. `Member` is `AUTH_USER_MODEL`.
+- `chores/` — chore definitions and their screens.
+- `core/` — the dashboard.
+- `conftest.py` — shared fixtures: `household`, `members` (five, one admin),
+  `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
+  `<app>/tests/`.
+- `schedule/` is laid out in `architecture.md` §2 and does not exist yet.
 
-- Dependencies are pinned in `requirements.txt`. Do not add one without asking.
-- Read `_docs/plan.md` before changing behaviour. Decisions there were made
-  deliberately with alternatives considered — if a change contradicts one, raise
-  it rather than quietly overriding it.
-- Tasks 1-3 in `_docs/tasks.md` must land in that order. `Member` is the custom
-  `AUTH_USER_MODEL` and must exist before the first `makemigrations`;
-  retrofitting it later means rebuilding migration history.
+## Docs
+
+- `_docs/process.md` — how work is organized. Read this first.
+- `_docs/plan.md` — the product spec, and why each decision was made.
+- `_docs/architecture.md` — the Django design.
+- `_docs/tasks.md` — the ordered backlog, 23 tasks.
+- `_docs/roles.md` — optional split of the work, for risky tasks only.
+- `_docs/followups.md` — things noticed but deliberately not done now.
+- `others/prompts_track.md` — append-only prompt log; don't rewrite entries.
+
+## How to build here
+
+Scope first: build what the task asks for, not the generalized version. Prefer
+the boring Django way. Don't add a field, a migration or an abstraction to close
+a hypothetical hole — write it in `_docs/followups.md` instead.
+
+Design rules that are load-bearing (these are cheap to follow while building,
+and expensive to retrofit):
+
 - Never store or log a PIN in plaintext. PINs go through Django's hasher stack,
-  minimum six digits. `Member.password` holds the hashed PIN; use `set_pin` /
-  `check_pin`.
-- `prod.py` must fail at import on missing config rather than starting with an
-  insecure fallback. Dev-only fallbacks belong in `dev.py`.
+  six digits minimum. `Member.password` holds the hash; use `set_pin`/`check_pin`.
+- `prod.py` fails at import on missing config rather than falling back to
+  something insecure. Dev-only fallbacks belong in `dev.py`.
 - Turns are materialized rows, never computed on read. A membership change must
-  not rewrite who was responsible in the past — that is the guarantee the whole
-  accountability feature rests on.
-- `SKIPPED_AWAY` is its own terminal status, not a flavour of `MISSED`. A planned
-  absence must never be recorded as a failure.
+  not rewrite who was responsible in the past.
+- `SKIPPED_AWAY` is its own terminal status, not a flavour of `MISSED`.
 - Scope every queryset through `request.user.household`. Never trust a PK from
   the URL without filtering by household first.
-- Turn generation and overdue marking must be idempotent — they run on cron *and*
-  lazily on dashboard load, so a second run must change nothing.
-- Deactivate, don't delete: departed roommates and retired chores are soft-flagged
-  so history survives.
+- Turn generation and overdue marking are idempotent — they run on cron *and*
+  lazily on dashboard load.
+- Deactivate, don't delete: departed roommates and retired chores are
+  soft-flagged so history survives.
+- Dependencies are pinned in `requirements.txt`. Ask before adding one.
+- `_docs/plan.md` decisions were made deliberately. If a change contradicts one,
+  raise it rather than quietly overriding it.
