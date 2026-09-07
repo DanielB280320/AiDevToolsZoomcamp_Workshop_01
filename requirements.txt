@@ -1,0 +1,13 @@
+# Core
+Django>=5.2,<6.0
+django-environ>=0.12          # 12-factor settings via .env
+
+# Static files / production serving
+whitenoise>=6.9
+gunicorn>=23.0
+
+# Dev & test
+pytest>=8.3
+pytest-django>=4.9
+ruff>=0.9
+django-debug-toolbar>=5.0

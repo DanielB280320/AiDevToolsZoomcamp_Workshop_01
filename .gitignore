@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Django
+*.sqlite3
+/media/
+/staticfiles/
+.env
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Editor swap files
+*.swp
+*.swo
+*~
