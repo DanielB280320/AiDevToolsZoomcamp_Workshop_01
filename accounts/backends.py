@@ -43,11 +43,23 @@ class PinBackend(BaseBackend):
         return member
 
     def user_can_authenticate(self, member):
-        """A deactivated roommate has moved out and may no longer sign in.
+        """Only an active roommate may sign in through this backend.
 
-        Their history stays intact (plan.md §4); only access is withdrawn.
+        A deactivated roommate has moved out (plan.md §4); their history
+        stays intact, only access is withdrawn.
+
+        A member with no household is the deployment operator, not a
+        roommate (``Member.household``'s own help text: "Left empty only for
+        an operator superuser, who administers the deployment rather than
+        living in it"). This task's Goal is "a roommate identifies
+        themself" — an operator explicitly is not one, so PinBackend must
+        never authenticate that account. This does not lock the operator out
+        of ``/admin/``: ``django.contrib.auth.backends.ModelBackend``, second
+        in ``AUTHENTICATION_BACKENDS``, authenticates the same superuser
+        independently via ``username=``/``password=``, unaffected by this
+        check.
         """
-        return bool(member.is_active)
+        return bool(member.is_active) and member.household_id is not None
 
     def get_user(self, user_id):
         try:

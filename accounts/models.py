@@ -6,7 +6,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from accounts.managers import MemberManager
-from accounts.validators import validate_timezone
+from accounts.validators import validate_pin, validate_timezone
 
 
 class Household(models.Model):
@@ -141,11 +141,19 @@ class Member(AbstractBaseUser, PermissionsMixin):
         return self.display_name
 
     def set_pin(self, raw_pin):
-        """Hash and store a PIN. An alias for ``set_password``.
+        """Validate, hash and store a PIN.
 
         Named for what it holds, so no caller is tempted to think the field
-        keeps a plaintext PIN.
+        keeps a plaintext PIN. Unlike the inherited ``set_password`` — which
+        this still uses to do the actual hashing, and which Django internals
+        (the admin's own password-change form, ``manage.py changepassword``)
+        call directly and must keep working unconstrained — this is the
+        single choke point for the six-digit minimum (plan.md §5,
+        architecture.md §6): every path that sets a *roommate's* PIN through
+        the model layer, not just the form classes in accounts/forms.py, goes
+        through here and raises ``ValidationError`` for anything shorter.
         """
+        validate_pin(raw_pin)
         self.set_password(raw_pin)
 
     def check_pin(self, raw_pin):
