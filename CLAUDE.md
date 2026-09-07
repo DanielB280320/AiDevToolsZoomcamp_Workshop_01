@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–21 are done and committed. Next task: 22.**
+**Tasks 1–22 are done and committed. Next task: 23 (the last).**
 
-Do not re-implement, re-groom or re-verify tasks 1–21. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–22. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -29,6 +29,8 @@ a few minutes, build it, check it, commit it, next. One session does all of it
 - `python manage.py migrate` — apply migrations
 - `python manage.py generate_turns [--weeks N]` — materialise upcoming turns
 - `python manage.py mark_overdue` — flag turns nobody did in time
+- `python manage.py setup_household --household X --admin Y --pin NNNNNN
+  [--seed seed.json]` — first run only; see `seed.example.json`
 - `python manage.py check --deploy` — production check (needs
   `DJANGO_SETTINGS_MODULE=config.settings.prod`, `SECRET_KEY`, `ALLOWED_HOSTS`)
 

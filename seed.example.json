@@ -1,0 +1,38 @@
+{
+  "_comment": [
+    "Copy this, edit it, and pass it to:",
+    "  python manage.py setup_household --household 'Flat 3B' --admin Ana --pin 918273 --seed seed.json",
+    "Everyone listed here gets `starting_pin`; they change it once they sign in.",
+    "Every name in a `rotation` must appear in `roommates` (or be the admin),",
+    "so a typo is an error rather than a quietly shorter rota."
+  ],
+  "starting_pin": "000000",
+  "roommates": ["Ben", "Cleo", "Dev", "Elif"],
+  "chores": [
+    {
+      "name": "Bins",
+      "description": "Kerb by 7am Tuesday.",
+      "cadence_unit": "WEEK",
+      "cadence_interval": 1,
+      "anchor_date": "2026-01-06",
+      "grace_days": 1,
+      "rotation": ["Ana", "Ben", "Cleo", "Dev", "Elif"]
+    },
+    {
+      "name": "Bathroom",
+      "cadence_unit": "WEEK",
+      "cadence_interval": 2,
+      "anchor_date": "2026-01-10",
+      "grace_days": 2,
+      "rotation": ["Cleo", "Ana", "Elif", "Ben", "Dev"]
+    },
+    {
+      "name": "Oven",
+      "cadence_unit": "MONTH",
+      "cadence_interval": 1,
+      "anchor_date": "2026-01-31",
+      "grace_days": 5,
+      "rotation": ["Dev", "Elif"]
+    }
+  ]
+}
