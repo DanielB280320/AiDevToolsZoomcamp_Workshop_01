@@ -9,6 +9,7 @@ happens to be exactly how issue #1's acceptance criteria are phrased (shell
 commands run against the real settings machinery).
 """
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -99,17 +100,17 @@ def test_dev_check_database_default_uses_sqlite(no_env_file):
 
 
 def test_database_url_postgres_changes_engine():
-    """Criterion 3: DATABASE_URL=postgres://... flips settings.DATABASES
-    to the postgresql backend, with zero source-file changes.
+    """Criterion 3: DATABASE_URL=postgres://... resolves to the postgresql
+    backend via django-environ, with zero source-file changes, checked
+    *without* calling ``django.setup()`` or otherwise initializing Django
+    (``django.setup()`` would import ``django.contrib.auth``, which needs the
+    ``psycopg`` driver just to *load* the postgresql backend module — a
+    driver this task deliberately does not install; see the issue's "Out of
+    scope" section).
 
-    This intentionally does not call ``django.setup()`` (unlike the exact
-    command quoted in the issue): doing so imports ``django.contrib.auth``,
-    which needs to import the ``psycopg`` driver just to *load* the
-    postgresql backend module, before any connection is attempted. Installing
-    a PostgreSQL driver is explicitly out of scope for this task (see issue
-    #1's "Out of scope" section) — see the discrepancy noted in the issue
-    comment. Reading ``settings.DATABASES`` without ``django.setup()`` is
-    enough to prove the env-driven, code-free swap this criterion is about.
+    Reading ``settings.DATABASES`` triggers only the settings module import
+    (which calls ``env.db_url(...)``, exactly what ``base.py`` does), not
+    Django's app registry, so this needs no driver installed.
     """
     result = run(
         [
@@ -122,6 +123,23 @@ def test_database_url_postgres_changes_engine():
             "DJANGO_SETTINGS_MODULE": "config.settings.dev",
             "DATABASE_URL": "postgres://user:pass@host:5432/chores",
         },
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "django.db.backends.postgresql"
+
+
+def test_database_url_postgres_via_environ_directly_no_django():
+    """Criterion 3's own literal example: django-environ's URL parser alone,
+    with no Django import at all -- proves the driver genuinely isn't needed
+    to resolve the ENGINE."""
+    result = run(
+        [
+            PYTHON,
+            "-c",
+            "import environ; e = environ.Env(); "
+            "print(e.db_url('DATABASE_URL', default='sqlite:///db.sqlite3')['ENGINE'])",
+        ],
+        env_overrides={"DATABASE_URL": "postgres://user:pass@host:5432/chores"},
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "django.db.backends.postgresql"
@@ -159,19 +177,67 @@ def test_prod_check_fails_fast_without_secret_key_or_allowed_hosts(
         assert result.returncode == 0, result.stderr
 
 
-def test_no_secret_hardcoded_in_committed_settings():
-    """Criterion 6: no real secret is hardcoded in a committed settings file.
-
-    ``base.py`` and ``prod.py`` must read ``SECRET_KEY`` from the
-    environment. ``dev.py``'s well-known, clearly-labelled
-    "django-insecure-..." fallback (so the project runs with no ``.env`` at
-    all) and ``test.py``'s "django-insecure-test-only" are not real secrets
-    and are exempt.
-    """
+def test_no_secret_hardcoded_in_base_or_prod_settings():
+    """Criterion 6: base.py and prod.py must read SECRET_KEY from the
+    environment only -- no hardcoded value, placeholder or otherwise."""
     for name in ("base.py", "prod.py"):
         contents = (BASE_DIR / "config" / "settings" / name).read_text()
         assert "django-insecure" not in contents
         assert 'env("SECRET_KEY")' in contents
+
+
+def test_prod_secret_key_has_no_fallback():
+    """Criterion 6: prod.py must have *no* fallback -- it fails rather than
+    ever starting with a placeholder SECRET_KEY, even if one happened to be
+    baked into dev.py/test.py by mistake."""
+    contents = (BASE_DIR / "config" / "settings" / "prod.py").read_text()
+    assert "django-insecure" not in contents
+    # No `if not SECRET_KEY: SECRET_KEY = ...`-style fallback anywhere.
+    assert "SECRET_KEY =" not in contents.replace('SECRET_KEY = env("SECRET_KEY")', "")
+
+    result = run(
+        [PYTHON, "manage.py", "check"],
+        env_overrides={
+            "DJANGO_SETTINGS_MODULE": "config.settings.prod",
+            "ALLOWED_HOSTS": "chores.example.com",
+        },
+    )
+    assert result.returncode != 0
+    assert "ImproperlyConfigured" in result.stderr
+    assert "SECRET_KEY" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "settings_module", ["config.settings.dev", "config.settings.test"]
+)
+def test_dev_and_test_secret_key_placeholder_is_fallback_only(
+    no_env_file, settings_module
+):
+    """Criterion 6: dev.py/test.py may hardcode an obviously-fake
+    `django-insecure-` placeholder SECRET_KEY, but *only* as a fallback used
+    when the environment variable is unset -- an explicit SECRET_KEY always
+    wins."""
+    script = (
+        "import django; django.setup(); "
+        "from django.conf import settings; print(settings.SECRET_KEY)"
+    )
+
+    unset = run(
+        [PYTHON, "-c", script],
+        env_overrides={"DJANGO_SETTINGS_MODULE": settings_module},
+    )
+    assert unset.returncode == 0, unset.stderr
+    assert unset.stdout.strip().startswith("django-insecure-")
+
+    explicit = run(
+        [PYTHON, "-c", script],
+        env_overrides={
+            "DJANGO_SETTINGS_MODULE": settings_module,
+            "SECRET_KEY": "an-explicit-secret-key-value",
+        },
+    )
+    assert explicit.returncode == 0, explicit.stderr
+    assert explicit.stdout.strip() == "an-explicit-secret-key-value"
 
 
 def test_env_is_gitignored():
@@ -301,6 +367,64 @@ def test_runserver_starts_with_no_traceback():
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def test_auth_user_model_is_accounts_member(no_env_file):
+    """Criterion 9: AUTH_USER_MODEL is set to the custom Member model."""
+    result = run(
+        [
+            PYTHON,
+            "-c",
+            "import django; django.setup(); "
+            "from django.conf import settings; print(settings.AUTH_USER_MODEL)",
+        ],
+        env_overrides={"DJANGO_SETTINGS_MODULE": "config.settings.dev"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "accounts.Member"
+
+
+def test_accounts_first_migration_creates_member_and_household():
+    """Criterion 9: accounts/migrations/0001_initial.py -- not a later
+    migration -- is what creates Member and Household. There must be no
+    earlier migration for a stock auth.User that a later one had to swap out
+    or rename around: 0001 is the very first migration file in the app, and
+    it is the one carrying these CreateModel operations, with
+    ``initial = True``.
+    """
+    migrations_dir = BASE_DIR / "accounts" / "migrations"
+    numbered = sorted(
+        p.name for p in migrations_dir.glob("0*.py") if p.name != "__init__.py"
+    )
+    assert numbered, "no numbered migrations found under accounts/migrations"
+    assert numbered[0] == "0001_initial.py", (
+        f"expected 0001_initial.py first, found {numbered[0]}"
+    )
+
+    spec = importlib.util.spec_from_file_location(
+        "accounts_migrations_0001_initial", migrations_dir / "0001_initial.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    migration = module.Migration
+    assert migration.initial is True
+
+    created_model_names = {
+        op.name for op in migration.operations if type(op).__name__ == "CreateModel"
+    }
+    assert created_model_names >= {"Member", "Household"}
+
+    # No stock-auth swap trail: nothing in this migration -- or any later
+    # accounts migration -- ever creates, renames, or alters a model named
+    # "User" (the stock model AUTH_USER_MODEL would have pointed at before
+    # the swap).
+    for path in migrations_dir.glob("0*.py"):
+        if path.name == "__init__.py":
+            continue
+        contents = path.read_text()
+        assert 'name="User"' not in contents
+        assert "name='User'" not in contents
 
 
 def test_readme_documents_setup_steps_in_order():

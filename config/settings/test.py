@@ -5,9 +5,15 @@ developer's working database.
 """
 
 from .base import *
+from .base import SECRET_KEY
 
 DEBUG = False
-SECRET_KEY = "django-insecure-test-only"
+
+# Fallback only, same rule as dev.py: an env-provided SECRET_KEY always wins,
+# this placeholder only fills the gap when none was set.
+if not SECRET_KEY:
+    SECRET_KEY = "django-insecure-test-only"
+
 ALLOWED_HOSTS = ["testserver", "localhost"]
 
 # Every fixture creates members, and each one hashes a PIN. PBKDF2 is
