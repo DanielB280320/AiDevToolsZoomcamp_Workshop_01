@@ -1,3 +1,5 @@
+import datetime as dt
+
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -136,3 +138,90 @@ class Member(AbstractBaseUser, PermissionsMixin):
 
     def check_pin(self, raw_pin):
         return self.check_password(raw_pin)
+
+
+class LoginAttempt(models.Model):
+    """One sign-in attempt, kept so repeated failures can be throttled.
+
+    plan.md §5 chose a short numeric PIN for daily convenience. Six digits is a
+    million combinations, which an unthrottled endpoint gives away in minutes.
+    This model is the other half of that decision: without it the PIN choice is
+    not safe enough even for a household tool (architecture.md §6).
+
+    Attempts are recorded against the *name that was typed*, not a Member FK,
+    so guesses at a name that does not exist are throttled too — otherwise the
+    lockout itself would reveal which names are real.
+    """
+
+    WINDOW = dt.timedelta(minutes=15)
+    MAX_FAILURES = 5
+
+    display_name = models.CharField(max_length=50, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    succeeded = models.BooleanField(default=False)
+    attempted_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-attempted_at"]
+        indexes = [
+            models.Index(fields=["display_name", "ip_address", "attempted_at"]),
+        ]
+
+    def __str__(self):
+        outcome = "ok" if self.succeeded else "failed"
+        return f"{self.display_name} {outcome} at {self.attempted_at:%Y-%m-%d %H:%M}"
+
+    @classmethod
+    def _recent_failures(cls, display_name, ip_address):
+        since = timezone.now() - cls.WINDOW
+        return cls.objects.filter(
+            display_name__iexact=(display_name or "").strip(),
+            ip_address=ip_address,
+            succeeded=False,
+            attempted_at__gte=since,
+        )
+
+    @classmethod
+    def is_locked_out(cls, display_name, ip_address):
+        return (
+            cls._recent_failures(display_name, ip_address).count() >= cls.MAX_FAILURES
+        )
+
+    @classmethod
+    def record(cls, display_name, ip_address, *, succeeded):
+        attempt = cls.objects.create(
+            display_name=(display_name or "").strip(),
+            ip_address=ip_address,
+            succeeded=succeeded,
+        )
+        if succeeded:
+            # A correct PIN clears the slate, so a roommate who fumbles twice
+            # and then gets it right is not one slip away from a lockout.
+            cls._recent_failures(display_name, ip_address).delete()
+        return attempt
+
+    @classmethod
+    def locked_until(cls, display_name, ip_address):
+        """When the current lockout lifts, or None if there is no lockout.
+
+        The window slides: it expires MAX_FAILURES-th-most-recent failure plus
+        WINDOW, so waiting it out works without any scheduled cleanup.
+        """
+        failures = cls._recent_failures(display_name, ip_address).order_by(
+            "-attempted_at"
+        )[: cls.MAX_FAILURES]
+        failures = list(failures)
+        if len(failures) < cls.MAX_FAILURES:
+            return None
+        return failures[-1].attempted_at + cls.WINDOW
+
+
+def purge_old_login_attempts(older_than=None):
+    """Drop attempts too old to affect any lockout.
+
+    Nothing depends on this running — the lockout query is time-bounded — but
+    the table would otherwise grow without limit.
+    """
+    cutoff = timezone.now() - (older_than or LoginAttempt.WINDOW * 4)
+    deleted, _ = LoginAttempt.objects.filter(attempted_at__lt=cutoff).delete()
+    return deleted

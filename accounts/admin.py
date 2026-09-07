@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from accounts.models import Household, Member
+from accounts.models import Household, LoginAttempt, Member
 
 
 @admin.register(Household)
@@ -51,3 +51,18 @@ class MemberAdmin(UserAdmin):
             },
         ),
     ]
+
+
+@admin.register(LoginAttempt)
+class LoginAttemptAdmin(admin.ModelAdmin):
+    """Read-only: the throttling record is evidence, not something to edit."""
+
+    list_display = ["display_name", "ip_address", "succeeded", "attempted_at"]
+    list_filter = ["succeeded", "attempted_at"]
+    search_fields = ["display_name", "ip_address"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
