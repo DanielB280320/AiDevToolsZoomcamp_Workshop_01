@@ -1,0 +1,17 @@
+target-version = "py313"
+line-length = 88
+extend-exclude = [".venv", "staticfiles", "media"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "DJ", "RUF"]
+ignore = [
+    # Django's own idiom for list_display, fieldsets, constraints and friends is
+    # a plain list on the class. Rewriting them as ClassVar buys nothing.
+    "RUF012",
+]
+
+[lint.per-file-ignores]
+# Layered settings are built by star-importing the base and overriding.
+"config/settings/*.py" = ["F403", "F405"]
+# Generated files.
+"*/migrations/*.py" = ["E501"]
