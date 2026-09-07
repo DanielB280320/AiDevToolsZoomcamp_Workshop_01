@@ -38,7 +38,9 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
 
-LOCAL_APPS = []
+LOCAL_APPS = [
+    "accounts",
+]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
 
@@ -100,6 +102,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # --- Authentication -------------------------------------------------------
+#
+# plan.md §5: roommates sign in with a display name and a PIN, so the user model
+# is ours from the first migration — see accounts.models.Member.
+
+AUTH_USER_MODEL = "accounts.Member"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
