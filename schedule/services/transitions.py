@@ -11,7 +11,14 @@ import datetime as dt
 from django.db import transaction
 from django.utils import timezone
 
-from schedule.models import TERMINAL_STATUSES, AwayPeriod, Turn, TurnStatus
+from schedule.models import (
+    TERMINAL_STATUSES,
+    ActivityLog,
+    AwayPeriod,
+    LogVerb,
+    Turn,
+    TurnStatus,
+)
 
 
 class TransitionRefused(Exception):
@@ -53,6 +60,15 @@ def complete_turn(turn, actor, *, when=None):
     # been late (plan.md §4).
     locked.was_late = timezone.localdate(when) > locked.deadline()
     locked.save(update_fields=["status", "completed_by", "completed_at", "was_late"])
+    ActivityLog.record(
+        LogVerb.COMPLETED,
+        locked,
+        actor=actor,
+        assignee=locked.assignee.display_name,
+        covered=locked.was_covered,
+        late=locked.was_late,
+        due_date=str(locked.due_date),
+    )
     return locked, True
 
 
@@ -80,9 +96,21 @@ def mark_overdue(queryset=None, *, today=None):
     )
     for grace in list(grace_values):
         cutoff = today - dt.timedelta(days=grace)
-        moved += pending.filter(chore__grace_days=grace, due_date__lt=cutoff).update(
-            status=TurnStatus.MISSED
-        )
+        overdue = pending.filter(chore__grace_days=grace, due_date__lt=cutoff)
+        # Read the rows before the UPDATE: afterwards they no longer match the
+        # filter, and plan.md §4 wants the log to name who was on the hook.
+        affected = list(overdue.select_related("chore", "assignee"))
+        moved += overdue.update(status=TurnStatus.MISSED)
+        for turn in affected:
+            # No actor: nobody *did* this, a deadline passed. Inventing an
+            # author would be a lie in the one record meant to settle disputes.
+            ActivityLog.record(
+                LogVerb.MISSED,
+                turn,
+                assignee=turn.assignee.display_name,
+                due_date=str(turn.due_date),
+                deadline=str(turn.deadline()),
+            )
     return moved
 
 
@@ -181,6 +209,12 @@ def skip_away_turns(queryset=None, *, today=None):
         turn.status = TurnStatus.SKIPPED_AWAY
         turn.save(update_fields=["status"])
         skipped += 1
+        ActivityLog.record(
+            LogVerb.SKIPPED_AWAY,
+            turn,
+            assignee=turn.assignee.display_name,
+            due_date=str(turn.due_date),
+        )
 
         # Hand it on to the first person in the rotation who is actually here.
         # If the next one is away too, keep walking; if the whole flat is away,
@@ -189,7 +223,7 @@ def skip_away_turns(queryset=None, *, today=None):
         for candidate in _rotation_order_from(turn.chore, turn.assignee):
             if _is_away(candidate, turn.due_date, absences):
                 continue
-            Turn.objects.create(
+            replacement = Turn.objects.create(
                 chore=turn.chore,
                 assignee=candidate,
                 cycle_index=turn.cycle_index,
@@ -198,6 +232,14 @@ def skip_away_turns(queryset=None, *, today=None):
                 replaces=turn,
             )
             reassigned += 1
+            ActivityLog.record(
+                LogVerb.REASSIGNED,
+                replacement,
+                from_member=turn.assignee.display_name,
+                to_member=candidate.display_name,
+                due_date=str(turn.due_date),
+                because="away",
+            )
             break
 
     return skipped, reassigned
@@ -248,8 +290,22 @@ def swap_turns(first, second):
     if first.assignee_id == second.assignee_id:
         raise TransitionRefused("Both turns already belong to the same person.")
 
+    was = (first.assignee, second.assignee)
     first.assignee, second.assignee = second.assignee, first.assignee
     first.swapped_with = second
     first.save(update_fields=["assignee", "swapped_with"])
     second.save(update_fields=["assignee"])
+
+    # One entry per turn, each naming both sides. A dispute is usually about one
+    # turn, and looking it up should not need knowing what it was traded for.
+    for turn, previous in ((first, was[0]), (second, was[1])):
+        partner = turn.swap_partner
+        ActivityLog.record(
+            LogVerb.SWAPPED,
+            turn,
+            from_member=previous.display_name,
+            to_member=turn.assignee.display_name,
+            due_date=str(turn.due_date),
+            traded_for=f"{partner.chore.name} on {partner.due_date}",
+        )
     return first, second

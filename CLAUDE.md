@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–19 are done and committed. Next task: 20.**
+**Tasks 1–20 are done and committed. Next task: 21.**
 
-Do not re-implement, re-groom or re-verify tasks 1–19. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–20. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -45,7 +45,8 @@ a few minutes, build it, check it, commit it, next. One session does all of it
   `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
   `<app>/tests/`.
 - `schedule/` — `Turn` (11), `services/generation.py` (12) and
-  `services/transitions.py` (14, 15, 18, 19) and `AwayPeriod` (17).
+  `services/transitions.py` (14, 15, 18, 19), `AwayPeriod` (17) and the
+  append-only `ActivityLog` (20).
 
 ## Docs
 
@@ -83,6 +84,8 @@ and expensive to retrofit):
   lazily on dashboard load.
 - Deactivate, don't delete: departed roommates and retired chores are
   soft-flagged so history survives.
+- `ActivityLog` is append-only, enforced in `save`/`delete`. Every transition
+  writes one. A state change with no entry is a bug.
 - Dependencies are pinned in `requirements.txt`. Ask before adding one.
 - `_docs/plan.md` decisions were made deliberately. If a change contradicts one,
   raise it rather than quietly overriding it.

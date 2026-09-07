@@ -12,6 +12,7 @@ not been generated yet.
 import datetime as dt
 
 from django.db import models
+from django.utils import timezone
 
 
 class TurnStatus(models.TextChoices):
@@ -227,3 +228,86 @@ class AwayPeriod(models.Model):
     @property
     def declared_on_their_behalf(self):
         return self.created_by_id is not None and self.created_by_id != self.member_id
+
+
+class LogVerb(models.TextChoices):
+    COMPLETED = "COMPLETED", "marked done"
+    MISSED = "MISSED", "flagged missed"
+    SKIPPED_AWAY = "SKIPPED_AWAY", "skipped for an absence"
+    REASSIGNED = "REASSIGNED", "handed on"
+    SWAPPED = "SWAPPED", "swapped"
+
+
+class ActivityLog(models.Model):
+    """An append-only record of every state change.
+
+    plan.md §4 justifies tracking by the need to settle disputes, and a turn's
+    current status alone cannot say who changed it, when, or from what — which
+    is exactly what a disagreement turns on. "It says missed but I did it on
+    Sunday" is unanswerable from the turn row; it is answerable from here.
+
+    Append-only is enforced in ``save``/``delete`` rather than left to
+    convention: a log that can be quietly edited is worth less than no log,
+    because it looks authoritative while being wrong.
+    """
+
+    class Immutable(Exception):
+        """Raised on any attempt to change or remove an entry."""
+
+    household = models.ForeignKey(
+        "accounts.Household", on_delete=models.CASCADE, related_name="activity"
+    )
+    # Null when the system acted rather than a person — overdue marking and
+    # absence skipping have no author, and inventing one would be a lie.
+    actor = models.ForeignKey(
+        "accounts.Member",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activity",
+    )
+    verb = models.CharField(max_length=16, choices=LogVerb.choices)
+    turn = models.ForeignKey(
+        Turn, on_delete=models.SET_NULL, null=True, blank=True, related_name="activity"
+    )
+    chore = models.ForeignKey(
+        "chores.Chore",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activity",
+    )
+    at = models.DateTimeField(default=timezone.now)
+    detail = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-at", "-id"]
+        indexes = [models.Index(fields=["household", "-at"])]
+
+    def __str__(self):
+        who = self.actor.display_name if self.actor else "the system"
+        return f"{who} {self.get_verb_display()} {self.chore or self.turn}"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise self.Immutable(
+                "Activity log entries are append-only and cannot be changed."
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise self.Immutable(
+            "Activity log entries are append-only and cannot be deleted."
+        )
+
+    @classmethod
+    def record(cls, verb, turn, actor=None, **detail):
+        """Write one entry for something that just happened to ``turn``."""
+        return cls.objects.create(
+            household_id=turn.chore.household_id,
+            actor=actor,
+            verb=verb,
+            turn=turn,
+            chore=turn.chore,
+            detail=detail,
+        )
