@@ -1,10 +1,13 @@
 """Smoke tests: the fixtures save, and the model guarantees task 2 rests on hold."""
 
 import datetime as dt
+import importlib.util
+from pathlib import Path
 
 import pytest
+from django.apps import apps as django_apps
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 
 from accounts.models import Household, Member
 from conftest import DEFAULT_PIN, REFERENCE_DATE
@@ -75,6 +78,54 @@ def test_duplicate_display_name_is_rejected(make_member):
     make_member("Ana")
     with pytest.raises(IntegrityError), transaction.atomic():
         make_member("Ana")
+
+
+def test_duplicate_display_name_is_rejected_case_insensitively(make_member):
+    """Sign-in (accounts/backends.py) looks members up with
+    display_name__iexact, so "Ana" and "ana" must be treated as the same
+    name at the database level too -- otherwise that lookup matches more
+    than one row and raises MultipleObjectsReturned instead of
+    authenticating anyone. See issue #2, acceptance criterion 5."""
+    make_member("Zqx")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        make_member("zqx")
+
+
+def test_migration_0003_guard_rejects_existing_case_insensitive_duplicates(household):
+    """accounts/migrations/0003_member_unique_display_name_ci.py runs a
+    RunPython pre-check before adding the case-insensitive constraint, so
+    that a database with pre-existing case-variant duplicates fails
+    `migrate` with a clear, actionable message instead of a raw
+    IntegrityError from the schema change itself.
+
+    The case-insensitive constraint is already applied in every test
+    database (via the normal migration run), so producing a colliding pair
+    to check the guard against means temporarily dropping just that index --
+    undone automatically when this test's transaction rolls back.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute('DROP INDEX "unique_display_name_ci"')
+
+    Member.objects.create_user(
+        display_name="Dup", password=DEFAULT_PIN, household=household
+    )
+    Member.objects.create_user(
+        display_name="dup", password=DEFAULT_PIN, household=household
+    )
+
+    migration_path = (
+        Path(__file__).resolve().parent.parent
+        / "migrations"
+        / "0003_member_unique_display_name_ci.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "accounts_migration_0003_test", migration_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    with pytest.raises(RuntimeError, match="dup"):
+        module.reject_existing_case_insensitive_duplicates(django_apps, None)
 
 
 def test_joined_on_defaults_to_today(frozen_clock, make_member):

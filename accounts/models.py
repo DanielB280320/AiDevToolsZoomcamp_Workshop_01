@@ -2,6 +2,7 @@ import datetime as dt
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 from accounts.managers import MemberManager
@@ -116,6 +117,17 @@ class Member(AbstractBaseUser, PermissionsMixin):
             models.UniqueConstraint(
                 fields=["household", "display_name"],
                 name="unique_display_name_per_household",
+            ),
+            # The field-level unique=True above is only byte-for-byte. Sign-in
+            # (accounts/backends.py) looks members up with display_name__iexact,
+            # so "Ana" and "ana" must be treated as the same name at the
+            # database level too, or that lookup can match more than one row
+            # and raise MultipleObjectsReturned instead of authenticating
+            # anyone. Added in 0003_member_display_name_unique_ci; see that
+            # migration for what happens to any pre-existing case-variant rows.
+            models.UniqueConstraint(
+                Lower("display_name"),
+                name="unique_display_name_ci",
             ),
         ]
 
