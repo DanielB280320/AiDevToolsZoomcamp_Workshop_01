@@ -12,7 +12,10 @@ One task at a time, from `_docs/tasks.md`, in order. Ship it, commit it, move on
    behaviour you added.
 3. **Check it.** Re-read the criteria, verify each one against running code,
    run `pytest`. Fix what is broken.
-4. **Commit, closed the issue and move to the next task.**
+4. **Commit, close the issue and move to the next task.** Closing is
+   `gh issue close <n> -c "<what landed, and the commit>"`. An issue left
+   open after its work has landed is what makes the backlog read as unfinished
+   and gets the task re-implemented.
 
 The main session does this itself. Do not launch a subagent per step.
 

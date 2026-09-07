@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–10 are done and committed. Next task: 11.**
+**Tasks 1–11 are done and committed. Next task: 12.**
 
-Do not re-implement, re-groom or re-verify tasks 1–10. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–11. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -41,7 +41,8 @@ a few minutes, build it, check it, commit it, next. One session does all of it
 - `conftest.py` — shared fixtures: `household`, `members` (five, one admin),
   `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
   `<app>/tests/`.
-- `schedule/` is laid out in `architecture.md` §2 and does not exist yet.
+- `schedule/` — `Turn` (task 11); the generation and transition services
+  land in tasks 12, 14, 15, 18 and 19.
 
 ## Docs
 
