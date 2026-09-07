@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–14 are done and committed. Next task: 15.**
+**Tasks 1–15 are done and committed. Next task: 16.**
 
-Do not re-implement, re-groom or re-verify tasks 1–14. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–15. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -28,6 +28,7 @@ a few minutes, build it, check it, commit it, next. One session does all of it
 - `python manage.py runserver` — dev server (settings default to `config.settings.dev`)
 - `python manage.py migrate` — apply migrations
 - `python manage.py generate_turns [--weeks N]` — materialise upcoming turns
+- `python manage.py mark_overdue` — flag turns nobody did in time
 - `python manage.py check --deploy` — production check (needs
   `DJANGO_SETTINGS_MODULE=config.settings.prod`, `SECRET_KEY`, `ALLOWED_HOSTS`)
 
@@ -43,7 +44,7 @@ a few minutes, build it, check it, commit it, next. One session does all of it
   `admin_member`, `roommate`, `make_member`, `frozen_clock`. Tests live in
   `<app>/tests/`.
 - `schedule/` — `Turn` (11), `services/generation.py` (12) and
-  `services/transitions.py` (14). Miss, skip and swap land in 15, 18, 19.
+  `services/transitions.py` (14, 15). Skip and swap land in 18 and 19.
 
 ## Docs
 
