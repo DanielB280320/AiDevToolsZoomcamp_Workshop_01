@@ -7,9 +7,9 @@ counted as failures.
 
 ## Status
 
-**Tasks 1–12 are done and committed. Next task: 13.**
+**Tasks 1–13 are done and committed. Next task: 14.**
 
-Do not re-implement, re-groom or re-verify tasks 1–12. They shipped, the suite
+Do not re-implement, re-groom or re-verify tasks 1–13. They shipped, the suite
 is green, and re-opening them is what stalled this project once already. If a
 finished task turns out to have a real bug that blocks the task in front of
 you, fix that bug narrowly and move on.
@@ -69,7 +69,9 @@ and expensive to retrofit):
 - `prod.py` fails at import on missing config rather than falling back to
   something insecure. Dev-only fallbacks belong in `dev.py`.
 - Turns are materialized rows, never computed on read. A membership change must
-  not rewrite who was responsible in the past.
+  not rewrite who was responsible in the past. `schedule/tests/
+  test_history_survives_membership_changes.py` is the canary for this — if a
+  change makes it fail, the change is wrong, not the test.
 - `SKIPPED_AWAY` is its own terminal status, not a flavour of `MISSED`.
 - Scope every queryset through `request.user.household`. Never trust a PK from
   the URL without filtering by household first.
