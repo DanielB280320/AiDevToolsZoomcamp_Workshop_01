@@ -40,6 +40,7 @@ DJANGO_APPS = [
 
 LOCAL_APPS = [
     "accounts",
+    "chores",
     "core",
 ]
 

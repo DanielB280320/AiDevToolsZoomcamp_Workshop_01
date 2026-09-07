@@ -7,6 +7,7 @@ urlpatterns = [
     # screens are separate and land in later tasks.
     path("admin/", admin.site.urls),
     path("", include("accounts.urls")),
+    path("", include("chores.urls")),
     path("", include("core.urls")),
 ]
 

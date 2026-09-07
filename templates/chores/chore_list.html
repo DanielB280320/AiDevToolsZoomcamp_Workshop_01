@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Chores{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div><h1>Chores</h1><p class="lede">Everyone can see the list. Admins change it.</p></div>
+    {% if can_edit %}<a class="btn" href="{% url 'chore_create' %}">Add a chore</a>{% endif %}
+  </div>
+  <ul class="stack">
+    {% for chore in chores %}
+      <li class="row">
+        <div class="row__main">
+          <a class="row__name" href="{{ chore.get_absolute_url }}">{{ chore.name }}</a>
+          <span class="row__meta">{{ chore.cadence_label }}</span>
+        </div>
+      </li>
+    {% empty %}<li class="empty">No chores yet.</li>{% endfor %}
+  </ul>
+  {% if archived %}
+    <h2>Archived</h2>
+    <ul class="stack">
+      {% for chore in archived %}
+        <li class="row row--muted">
+          <div class="row__main">
+            <a class="row__name" href="{{ chore.get_absolute_url }}">{{ chore.name }}</a>
+            <span class="tag tag--quiet">Archived</span>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endblock %}
