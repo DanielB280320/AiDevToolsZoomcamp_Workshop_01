@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Add a roommate · Chores{% endblock %}
+
+{% block content %}
+<div class="card card--narrow">
+  <h1>Add a roommate</h1>
+  <p class="lede">They sign in with this name and PIN.</p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "accounts/_form.html" %}
+    <button type="submit" class="btn">Add roommate</button>
+    <a class="cancel" href="{% url 'member_list' %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Roommates · Chores{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1>Roommates</h1>
+      <p class="lede">{{ active_count }} living here right now.</p>
+    </div>
+    <a class="btn" href="{% url 'member_add' %}">Add a roommate</a>
+  </div>
+
+  <ul class="stack">
+    {% for member in members %}
+      <li class="row {% if not member.is_active %}row--muted{% endif %}">
+        <div class="row__main">
+          <span class="row__name">{{ member.display_name }}</span>
+          {% if member.is_admin %}<span class="tag">Admin</span>{% endif %}
+          {% if not member.is_active %}<span class="tag tag--quiet">Moved out</span>{% endif %}
+          <span class="row__meta">Joined {{ member.joined_on }}</span>
+        </div>
+
+        <div class="row__actions">
+          <a href="{% url 'member_reset_pin' member.pk %}">Reset PIN</a>
+
+          <form method="post" action="{% url 'member_toggle_admin' member.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn--link">
+              {% if member.is_admin %}Remove admin{% else %}Make admin{% endif %}
+            </button>
+          </form>
+
+          <form method="post" action="{% url 'member_set_active' member.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="active" value="{% if member.is_active %}0{% else %}1{% endif %}">
+            <button type="submit" class="btn btn--link">
+              {% if member.is_active %}Mark moved out{% else %}Move back in{% endif %}
+            </button>
+          </form>
+        </div>
+      </li>
+    {% empty %}
+      <li class="empty">No roommates yet.</li>
+    {% endfor %}
+  </ul>
+
+  <p class="note">
+    Marking someone moved out keeps everything they did. It only stops them
+    signing in and being given new turns.
+  </p>
+{% endblock %}

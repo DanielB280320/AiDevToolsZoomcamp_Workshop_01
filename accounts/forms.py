@@ -1,5 +1,6 @@
 from django import forms
 
+from accounts.models import Member
 from accounts.validators import PIN_MAX_LENGTH, PIN_MIN_LENGTH, validate_pin
 
 
@@ -75,3 +76,48 @@ class SetPinForm(forms.Form):
         if pin and confirm and pin != confirm:
             self.add_error("pin_confirm", "The two PINs don't match.")
         return cleaned
+
+
+class MemberForm(forms.ModelForm):
+    """Add a roommate, with the PIN they start out with (plan.md §1, §5)."""
+
+    pin = PinField(
+        label="Starting PIN",
+        validators=[validate_pin],
+        help_text=(
+            f"{PIN_MIN_LENGTH} digits or more. Tell it to them in person; "
+            "they can change it later."
+        ),
+        widget=forms.PasswordInput(
+            attrs={
+                "inputmode": "numeric",
+                "pattern": "[0-9]*",
+                "autocomplete": "new-password",
+            }
+        ),
+    )
+
+    class Meta:
+        model = Member
+        fields = ["display_name", "is_admin"]
+        labels = {
+            "display_name": "Name",
+            "is_admin": "Household admin",
+        }
+        help_texts = {
+            "is_admin": (
+                "Admins can add, edit and archive chores, and manage this list."
+            ),
+        }
+
+    def __init__(self, *args, household=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.household = household
+
+    def save(self, commit=True):
+        member = super().save(commit=False)
+        member.household = self.household
+        member.set_pin(self.cleaned_data["pin"])
+        if commit:
+            member.save()
+        return member
