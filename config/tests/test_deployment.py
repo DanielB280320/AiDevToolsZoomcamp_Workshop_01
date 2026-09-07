@@ -18,6 +18,10 @@ import pytest
 BASE_DIR = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 
+# The repository README is the course homework brief; this app's own setup and
+# deployment documentation lives here.
+PROJECT_DOC = BASE_DIR / "Household_Chores_Manager" / "description.md"
+
 PROD_ENV = {
     "DJANGO_SETTINGS_MODULE": "config.settings.prod",
     # 50+ characters with real variety: Django's own security.W009 check
@@ -207,17 +211,17 @@ def test_each_scheduled_job_runs_under_production_settings(command, tmp_path):
 
 
 @pytest.mark.parametrize("command", ["generate_turns", "mark_overdue"])
-def test_the_readme_documents_each_scheduled_job(command):
-    readme = (BASE_DIR / "README.md").read_text()
+def test_the_docs_document_each_scheduled_job(command):
+    docs = PROJECT_DOC.read_text()
 
-    assert command in readme, f"{command} is not documented"
+    assert command in docs, f"{command} is not documented"
 
 
-def test_the_readme_documents_the_required_environment_variables():
-    readme = (BASE_DIR / "README.md").read_text()
+def test_the_docs_document_the_required_environment_variables():
+    docs = PROJECT_DOC.read_text()
 
     for variable in ("SECRET_KEY", "ALLOWED_HOSTS", "DATABASE_URL", "TIME_ZONE"):
-        assert variable in readme, f"{variable} is not documented"
+        assert variable in docs, f"{variable} is not documented"
 
 
 # Criterion 6 — it actually serves a request with DEBUG off.

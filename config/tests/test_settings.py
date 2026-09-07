@@ -20,6 +20,10 @@ import pytest
 BASE_DIR = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 
+# The repository README is the course homework brief; this app's own setup and
+# deployment documentation lives here.
+PROJECT_DOC = BASE_DIR / "Household_Chores_Manager" / "description.md"
+
 
 def run(args, *, env_overrides=None, unset=()):
     """Run ``args`` in a subprocess from the project root with a minimal env.
@@ -427,17 +431,17 @@ def test_accounts_first_migration_creates_member_and_household():
         assert "name='User'" not in contents
 
 
-def test_readme_documents_setup_steps_in_order():
-    """Criterion 11: README covers, in order, venv -> install -> .env -> check."""
-    readme = (BASE_DIR / "README.md").read_text()
+def test_docs_document_setup_steps_in_order():
+    """Criterion 11: the docs cover, in order, venv -> install -> .env -> check."""
+    docs = PROJECT_DOC.read_text()
     steps = [
         "venv",
         "pip install -r requirements.txt",
         "cp .env.example .env",
         "manage.py check",
     ]
-    positions = [readme.index(step) for step in steps]
-    assert positions == sorted(positions), "README setup steps are out of order"
+    positions = [docs.index(step) for step in steps]
+    assert positions == sorted(positions), "setup steps are out of order"
 
 
 class TestTheSuiteForcesItsOwnSettings:
